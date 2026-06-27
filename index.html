@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v24.1 行政穩定版)</h1>
+        <h1>🏠 宿舍管理系統 (v24.2 多重狀態標籤版)</h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -330,7 +330,6 @@
                 console.error("Cloud error, loading defaults:", error);
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
             } finally {
-                // 確保必要資料欄位必定健全
                 if(!configParams) configParams = {};
                 if(!configParams.historyLogs) configParams.historyLogs = [];
                 if(!configParams.deferredPayment) configParams.deferredPayment = {};
@@ -351,7 +350,7 @@
                 if(currentActiveView === "home") showDefaultHome();
                 else switchRoom(currentActiveView);
                 
-                showLoading(false); // 強制解除加載畫面
+                showLoading(false);
             }
         }
 
@@ -411,6 +410,7 @@
             });
         }
 
+        // v24.2 核心更新：修改標籤結構為並列 if，允許狀態同時共存
         function renderRoomList() {
             const list = document.getElementById('room-list');
             if(!list) return;
@@ -447,18 +447,18 @@
                     item.className = `room-item ${roomId === currentActiveView ? 'active' : ''} ${isEmpty ? 'empty-room' : ''}`;
                     if (room.isDriverOnly && !room.name) tags += '<span class="tag tag-special" style="background:#5c6bc0;">司領房</span>';
                     
+                    // 特殊需求標籤狀態判定 —— 改為獨立並列 if 結構，使多種狀態能同時呈現
                     if (!roomId.includes("公共區域") && !roomId.includes("公共開放區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
                         } else if (room.name) {
-                            if (room.isWarden) tags += '<span class="tag tag-warden">舍監</span>';
-                            else if (room.isLeaveRetention) tags += `<span class="tag tag-leave-status">⏳ 留停房</span>`;
-                            else if (room.isSecurityOnly) tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>';
-                            else if (room.isWarehouse) tags += '<span class="tag tag-warehouse">倉庫</span>';
-                            
-                            if (room.hasRoommate) tags += '<span class="tag tag-special" style="background:#00bcd4;">雙人同住</span>';
-                            if (room.isTemp) tags += '<span class="tag tag-temp">⏳ 臨時</span>';
-                            if (room.leaveDate && !room.isTemp) tags += `<span class="tag tag-leave">預退</span>`;
+                            if (room.isWarden) { tags += '<span class="tag tag-warden">舍監</span>'; }
+                            if (room.isLeaveRetention) { tags += `<span class="tag tag-leave-status">⏳ 留停房</span>`; }
+                            if (room.isSecurityOnly) { tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>'; }
+                            if (room.isWarehouse && !room.isLeaveRetention) { tags += '<span class="tag tag-warehouse">倉庫</span>'; }
+                            if (room.hasRoommate) { tags += '<span class="tag tag-special" style="background:#00bcd4;">雙人同住</span>'; }
+                            if (room.isTemp) { tags += '<span class="tag tag-temp">⏳ 臨時</span>'; }
+                            if (room.leaveDate && !room.isTemp) { tags += `<span class="tag tag-leave">預退</span>`; }
                         }
                     }
                     
@@ -577,6 +577,7 @@
                 titleHtml += `<span class="tag tag-leave-status" style="padding:4px 10px; font-size:13px;">⚠️ 留職停薪保留房 (${room.leaveRetentionReason})${retentionFeeNotice}</span> `;
             }
             if (room.isSecurityOnly) titleHtml += '<span class="tag tag-special" style="background:#4caf50; padding:4px 10px; font-size:13px;">保全夜宿免收房</span> ';
+            if (room.hasRoommate) titleHtml += '<span class="tag tag-special" style="background:#00bcd4; padding:4px 10px; font-size:13px;">雙人同住狀態</span> ';
             if (room.leaveDate) titleHtml += `<span class="tag tag-leave" style="padding:4px 10px; font-size:13px;">⚠️ 預定於 ${room.leaveDate} 退宿清除</span>`;
             
             let baseFee = configParams.mgmtFee;
@@ -751,13 +752,15 @@
 
                         mgmtFee = Math.round(baseMonthlyFee * (activeDays / totalDaysInMonth));
 
-                        let statusLabel = room.name;
-                        if (room.hasRoommate && room.roommateName) statusLabel += `+${room.roommateName}(同住)`;
-                        if (room.isWarden) statusLabel += "(舍監免收)";
-                        if (room.isWarehouse && !room.isLeaveRetention) statusLabel += "(倉庫)";
-                        if (room.isSecurityOnly) statusLabel += "(保全免收)";
-                        if (room.isLeaveRetention) statusLabel += `(${room.leaveRetentionReason}留停房)`;
+                        // 總體財務清冊中的行政項目欄位也一併串聯顯示，避免資訊遺漏
+                        let statusParts = [room.name];
+                        if (room.hasRoommate && room.roommateName) statusParts.push(`+${room.roommateName}(同住)`);
+                        if (room.isWarden) statusParts.push("舍監免收");
+                        if (room.isWarehouse && !room.isLeaveRetention) statusParts.push("倉庫");
+                        if (room.isSecurityOnly) statusParts.push("保全免收");
+                        if (room.isLeaveRetention) statusParts.push(`${room.leaveRetentionReason}留停房`);
                         
+                        let statusLabel = statusParts.join('-');
                         if (activeDays < totalDaysInMonth) {
                             typeLabel = `${statusLabel} [住${activeDays}天]`;
                         } else {
@@ -1024,18 +1027,25 @@
             if(!roomId) return;
 
             const room = rooms[roomId];
-            room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.leaveRetentionReason = ''; room.isWarden = false;
-            room.leaveRetentionStart = ''; room.leaveRetentionEnd = ''; room.leaveRetentionPrepaid = 0;
 
-            if(type === 'WAREHOUSE') { room.isWarehouse = true; } 
-            else if(type === 'SECURITY') { room.isSecurityOnly = true; } 
-            else if(type === 'WARDEN') { room.isWarden = true; } 
-            else if(type === 'ROOMMATE') {
+            // 注意：若要允許狀態重複，在 submit 新狀態時不可將舊狀態一刀切全清空。
+            // 這裡依據常規行政邏輯微調：只有選「還原常規」時才全清；其餘則是在原本狀態上加蓋或調整。
+            if(type === 'NORMAL') {
+                room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.leaveRetentionReason = ''; room.isWarden = false;
+                room.leaveRetentionStart = ''; room.leaveRetentionEnd = ''; room.leaveRetentionPrepaid = 0;
+            } else if(type === 'WAREHOUSE') { 
+                room.isWarehouse = true; room.isSecurityOnly = false; room.isLeaveRetention = false; room.isWarden = false;
+            } else if(type === 'SECURITY') { 
+                room.isSecurityOnly = true; room.isWarehouse = false; room.isLeaveRetention = false; room.isWarden = false;
+            } else if(type === 'WARDEN') { 
+                room.isWarden = true; room.isWarehouse = false; room.isSecurityOnly = false; room.isLeaveRetention = false;
+            } else if(type === 'ROOMMATE') {
                 const rName = document.getElementById('sr-roommate-name').value.trim();
                 if(!rName) { alert("請輸入室友姓名！"); return; }
                 room.hasRoommate = true; room.roommateName = rName;
             } else if(type === 'LEAVE_RETENTION') {
                 room.isLeaveRetention = true; 
+                room.isWarehouse = false; room.isSecurityOnly = false; room.isWarden = false;
                 room.leaveRetentionReason = document.getElementById('sr-leave-reason').value;
                 room.leaveRetentionStart = document.getElementById('sr-leave-start').value;
                 room.leaveRetentionEnd = document.getElementById('sr-leave-end').value;
@@ -1127,7 +1137,7 @@
         function exportData() {
             const packageData = { SYSTEM_ROOMS_DATA: rooms, SYSTEM_CONFIG: configParams };
             const link = document.createElement('a'); link.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(packageData, null, 2)));
-            link.setAttribute('download', `dorm_system_v24_1_${TODAY_STR}.json`); link.click();
+            link.setAttribute('download', `dorm_system_v24_2_${TODAY_STR}.json`); link.click();
         }
 
         function triggerImport() { document.getElementById('import-file').click(); }
