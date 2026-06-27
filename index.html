@@ -38,10 +38,9 @@
     <div class="container">
         <header>
             <h1>宿舍管理系統</h1>
-            <p>Firebase 雲端同步版 2026.06.27 V5</p>
+            <p>Firebase 雲端同步版 2026.06.27 v6</p>
         </header>
         <div class="main-content">
-            <!-- Sidebar -->
             <div class="sidebar">
                 <h3>房間列表</h3>
                 <div id="room-list"></div>
@@ -54,8 +53,6 @@
                 <button onclick="exportData()">📤 匯出備份</button>
                 <button onclick="importData()">📥 匯入備份</button>
             </div>
-
-            <!-- Main Content -->
             <div class="content">
                 <div id="current-room-info">
                     <h2>請選擇房間</h2>
@@ -100,7 +97,7 @@
     </div>
 
     <script>
-// Firebase Config (已完整修正)
+        // Firebase Config (已完整修正)
         const firebaseConfig = {
           apiKey: "AIzaSyAAu8JMa-woq2jDKjPwFLrMo2WEfmvK1Q0",
           authDomain: "lofi-dorm.firebaseapp.com",
