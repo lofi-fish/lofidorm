@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v24.2 多重狀態標籤版)</h1>
+        <h1>🏠 宿舍管理系統 (v24.3 長期申請優化版) 2026.06.27</h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -95,6 +95,7 @@
             <h3>宿舍入住管理</h3>
             <button onclick="showApplyStayModal()">長期入住申請</button>
             <button onclick="showTempStayModal()" style="background-color: #2196F3;">臨時入住申請</button>
+            <button onclick="showTempStayList()" style="background-color: #0288d1; font-size: 14px; padding: 8px 12px;">📋 檢視臨時入住預約清單</button>
             <button onclick="showSpecialRequestModal()" style="background-color: #7e57c2;">✨ 特殊需求申請</button>
             <button onclick="showApplyLeaveModal()">申請退宿清除</button>
             <hr>
@@ -141,6 +142,7 @@
                 <option value="NORMAL">常規常駐狀態 (依房型收費)</option>
                 <option value="WAREHOUSE">申請作為倉庫 (改按倉庫費計收)</option>
                 <option value="WARDEN">申請作為舍監房 (管理費免收)</option>
+                <option value="SECURITY">申請作為保全夜宿房 (管理費免收)</option>
                 <option value="ROOMMATE">申請同住狀態 (維持原費率，有同住者)</option>
             </select>
 
@@ -160,7 +162,7 @@
             <label>選擇房間：</label>
             <select id="temp-room"></select>
             <label>申請人姓名：</label>
-            <input type="text" id="temp-applicant" placeholder="請輸入申請人">
+            <input type="text" id="temp-applicant" placeholder="請輸入申請人" oninput="syncTempName()">
             <label style="display:block; margin: 5px 0;">
                 <input type="checkbox" id="temp-same-person" onchange="syncTempName()"> 住宿大名同申請人
             </label>
@@ -348,6 +350,7 @@
                 renderRateHistory();
                 
                 if(currentActiveView === "home") showDefaultHome();
+                else if(currentActiveView === "temp_list") showTempStayList();
                 else switchRoom(currentActiveView);
                 
                 showLoading(false);
@@ -368,6 +371,7 @@
                 renderRoomList();
                 renderRateHistory();
                 if(currentActiveView === "home") showDefaultHome();
+                else if(currentActiveView === "temp_list") showTempStayList();
                 else switchRoom(currentActiveView);
                 showLoading(false);
             }
@@ -410,7 +414,6 @@
             });
         }
 
-        // v24.2 核心更新：修改標籤結構為並列 if，允許狀態同時共存
         function renderRoomList() {
             const list = document.getElementById('room-list');
             if(!list) return;
@@ -447,7 +450,6 @@
                     item.className = `room-item ${roomId === currentActiveView ? 'active' : ''} ${isEmpty ? 'empty-room' : ''}`;
                     if (room.isDriverOnly && !room.name) tags += '<span class="tag tag-special" style="background:#5c6bc0;">司領房</span>';
                     
-                    // 特殊需求標籤狀態判定 —— 改為獨立並列 if 結構，使多種狀態能同時呈現
                     if (!roomId.includes("公共區域") && !roomId.includes("公共開放區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
@@ -752,7 +754,6 @@
 
                         mgmtFee = Math.round(baseMonthlyFee * (activeDays / totalDaysInMonth));
 
-                        // 總體財務清冊中的行政項目欄位也一併串聯顯示，避免資訊遺漏
                         let statusParts = [room.name];
                         if (room.hasRoommate && room.roommateName) statusParts.push(`+${room.roommateName}(同住)`);
                         if (room.isWarden) statusParts.push("舍監免收");
@@ -917,10 +918,11 @@
             const room = rooms[roomId];
             room.name = name; room.checkInDate = checkInDate;
             room.isTemp = false; room.tempInfo = null; room.leaveDate = '';
-            room.isWarehouse = false; room.isSecurityOnly = (roomId === "1-7"); room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.isWarden = false;
+            room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.isWarden = false;
 
             if(specType === 'WAREHOUSE') { room.isWarehouse = true; }
             else if(specType === 'WARDEN') { room.isWarden = true; }
+            else if(specType === 'SECURITY') { room.isSecurityOnly = true; }
             else if(specType === 'ROOMMATE') {
                 const rmName = document.getElementById('apply-roommate-name').value.trim();
                 if(!rmName) { alert("請輸入同住室友姓名！"); return; }
@@ -952,6 +954,125 @@
             document.getElementById('temp-reason-select').selectedIndex = 0;
             document.getElementById('temp-reason-other-box').style.display = 'none';
             document.getElementById('temp-stay-modal').style.display = 'block';
+        }
+
+        async function submitTempStay() {
+            const roomId = document.getElementById('temp-room').value;
+            const applicant = document.getElementById('temp-applicant').value.trim();
+            const name = document.getElementById('temp-name').value.trim();
+            const startDate = document.getElementById('temp-start-date').value;
+            const endDate = document.getElementById('temp-end-date').value;
+            
+            let reason = document.getElementById('temp-reason-select').value;
+            if(reason === '其他') {
+                reason = document.getElementById('temp-reason-other-text').value.trim() || '其他原因';
+            }
+
+            if (!roomId || !name || !startDate || !endDate) { 
+                alert('請確實填寫房間、住宿姓名與入住起迄日期！'); 
+                return; 
+            }
+
+            const room = rooms[roomId];
+            room.name = name;
+            room.isTemp = true;
+            room.checkInDate = startDate;
+            room.leaveDate = endDate; 
+            
+            room.tempInfo = {
+                applicant: applicant || name,
+                startDate: startDate,
+                endDate: endDate,
+                reason: reason
+            };
+
+            room.isWarehouse = false;
+            room.isSecurityOnly = false;
+            room.hasRoommate = false;
+            room.roommateName = '';
+            room.isLeaveRetention = false;
+            room.isWarden = false;
+            room.isBookingFuture = false;
+
+            closeModal('temp-stay-modal');
+            switchRoom(roomId);
+            await saveToCloud();
+        }
+
+        // 🟢 新增：檢視臨時入住預約清單
+        function showTempStayList() {
+            currentActiveView = "temp_list";
+            renderRoomList();
+            const displayArea = document.getElementById('main-display-area');
+            if(!displayArea) return;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            let listRowsHtml = "";
+            let count = 0;
+
+            Object.keys(rooms).sort().forEach(roomId => {
+                const room = rooms[roomId];
+                if(room.isTemp && room.tempInfo) {
+                    count++;
+                    const info = room.tempInfo;
+                    
+                    // 計算入住天數差異
+                    let days = "-";
+                    if(info.startDate && info.endDate) {
+                        const diffTime = Math.abs(new Date(info.endDate) - new Date(info.startDate));
+                        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + " 天";
+                    }
+
+                    listRowsHtml += `
+                        <tr>
+                            <td><b>${roomId}</b></td>
+                            <td><span style="background:#2196F3; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${room.name}</span></td>
+                            <td>${info.applicant || '-'}</td>
+                            <td>${info.startDate}</td>
+                            <td>${info.endDate}</td>
+                            <td><span style="color:#e65100; font-weight:bold;">${days}</span></td>
+                            <td style="text-align:left; padding-left:10px;">${info.reason || '-'}</td>
+                            <td>
+                                <button onclick="switchRoom('${roomId}')" style="padding:4px 8px; font-size:12px; background:#4caf50;">前往房間</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+
+            if(count === 0) {
+                listRowsHtml = `<tr><td colspan="8" style="color:gray; padding:30px; font-size:15px;">🔍 目前系統中暫無任何臨時入住登記資料。</td></tr>`;
+            }
+
+            displayArea.innerHTML = `
+                <div class="bill-summary-box" style="margin-top:0; background-color: #f0f7ff; border-color: #b3d7ff;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #0d47a1; font-size:20px;">📋 宿舍臨時入住預約總清冊</h3>
+                        <button onclick="showDefaultHome()" style="background:#6c757d; padding:8px 12px; font-size:13px; margin:0;">⬅️ 返回財務清冊首頁</button>
+                    </div>
+                    <p style="font-size:13px; color:#555; margin-top:-10px;">💡 說明：以下列出所有目前正在住宿或未來已預約的臨時入住人員。到期後系統會於隔日自動清除該房狀態。</p>
+                    
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr style="background-color: #d1e8ff; color: #0d47a1;">
+                                    <th>房間</th>
+                                    <th>住宿大名</th>
+                                    <th>申請人</th>
+                                    <th>預計入住日</th>
+                                    <th>預計退房日</th>
+                                    <th>住宿天數</th>
+                                    <th>住宿原因與備註</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${listRowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
         }
 
         function showSpecialRequestModal() {
@@ -1028,8 +1149,6 @@
 
             const room = rooms[roomId];
 
-            // 注意：若要允許狀態重複，在 submit 新狀態時不可將舊狀態一刀切全清空。
-            // 這裡依據常規行政邏輯微調：只有選「還原常規」時才全清；其餘則是在原本狀態上加蓋或調整。
             if(type === 'NORMAL') {
                 room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.leaveRetentionReason = ''; room.isWarden = false;
                 room.leaveRetentionStart = ''; room.leaveRetentionEnd = ''; room.leaveRetentionPrepaid = 0;
@@ -1137,7 +1256,7 @@
         function exportData() {
             const packageData = { SYSTEM_ROOMS_DATA: rooms, SYSTEM_CONFIG: configParams };
             const link = document.createElement('a'); link.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(packageData, null, 2)));
-            link.setAttribute('download', `dorm_system_v24_2_${TODAY_STR}.json`); link.click();
+            link.setAttribute('download', `dorm_system_v24_3_${TODAY_STR}.json`); link.click();
         }
 
         function triggerImport() { document.getElementById('import-file').click(); }
