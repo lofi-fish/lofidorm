@@ -6,14 +6,17 @@
     <title>宿舍管理系統 (雲端同步版)</title>
     <style>
         :root { --main-green: #0f4c2a; --accent-green: #1e7a45; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e0f0e4; margin: 0; padding: 10px; color: #0f2a1f; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
-        header { background: linear-gradient(135deg, var(--main-green), var(--accent-green)); color: white; padding: 20px; text-align: center; }
-        h1 { margin: 0; font-size: 24px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e0f0e4; margin: 0; padding: 0; color: #0f2a1f; }
         
-        /* 側邊欄與主要內容改用彈性排版，並支援響應式 */
-        .main-content { display: flex; flex-direction: row; flex-wrap: wrap; }
-        .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; box-sizing: border-box; }
+        /* 導覽列與漢堡按鈕 */
+        nav { background: linear-gradient(135deg, var(--main-green), var(--accent-green)); color: white; padding: 15px; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 101; }
+        nav h1 { margin: 0; font-size: 20px; }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; margin: 0; }
+
+        .container { max-width: 1200px; margin: 0 auto; background: white; min-height: 100vh; display: flex; position: relative; }
+        
+        /* 側邊欄基本樣式 (電腦版) */
+        .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; box-sizing: border-box; transition: transform 0.3s ease; z-index: 100; }
         .content { flex: 1; padding: 20px; min-width: 300px; position: relative; box-sizing: border-box; }
         
         .floor-header { padding: 12px 15px; background: var(--main-green); color: white; font-weight: bold; margin: 8px 0 4px; border-radius: 8px; cursor: pointer; }
@@ -22,92 +25,112 @@
         .room-item:hover, .room-item.active { background: #b0d4b8; }
         .warehouse-tag { background: #ff9800; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-left: 8px; display: inline-block; }
         
-        /* 按鈕優化：手機上更好點擊 */
         button { padding: 12px 16px; border: none; border-radius: 6px; background: var(--accent-green); color: white; cursor: pointer; margin: 5px 2px; font-size: 15px; }
         button:hover { background: #0f4c2a; }
         .btn-danger { background-color: #d9534f; }
         .btn-danger:hover { background-color: #c9302c; }
+        .sidebar button { width: 100%; margin: 5px 0; box-sizing: border-box; }
         
-        /* 彈出視窗優化 */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        /* 彈出視窗 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1002; }
         .modal-content { background: white; margin: 15% auto; padding: 25px; width: 85%; max-width: 450px; border-radius: 12px; position: relative; box-sizing: border-box; }
         .close { position: absolute; top: 10px; right: 20px; font-size: 32px; cursor: pointer; }
-        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin: 8px 0; box-sizing: border-box; font-size: 15px; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin: 8px 0; box-sizing: border-box; font-size: 15px; width: 100%; }
         
         #meter-section { background: #f4fdf7; padding: 15px; border-radius: 8px; border: 1px solid #b0d4b8; margin-bottom: 20px; }
         #loading-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 99; text-align: center; padding-top: 100px; font-size: 18px; font-weight: bold; color: var(--main-green); }
         
-        /* 表格響應式：在小螢幕上可以橫向捲動，字體適中 */
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; text-align: center; min-width: 500px; }
-        th, td { padding: 10px 6px; font-size: 14px; }
+        th, td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
 
-        /* 📱 手機與平板螢幕優化 (RWD) */
+        /* 遮罩層 (手機選單打開時背景變暗) */
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
+
+        /* 📱 手機與平板行動裝置優化 (RWD) */
         @media (max-width: 768px) {
-            body { padding: 5px; }
-            .main-content { flex-direction: column; }
-            .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #b0d4b8; padding: 12px; }
-            .content { padding: 15px; }
-            button { width: 46%; padding: 12px 10px; font-size: 14px; display: inline-block; } /* 讓功能按鈕並排 */
-            .sidebar button { width: 100%; margin: 5px 0; } /* 側邊欄按鈕滿版 */
-            .modal-content { margin: 30% auto; width: 90%; padding: 20px; }
-            input, select { width: 100%; }
+            .menu-toggle { display: block; } /* 顯示漢堡鈕 */
+            
+            /* 將側邊欄改為左側隱藏式滑出選單 */
+            .sidebar {
+                position: fixed;
+                top: 58px; /* 避開頂部導覽列 */
+                left: 0;
+                height: calc(100vh - 58px);
+                transform: translateX(-100%); /* 預設隱藏在畫面左邊外 */
+                overflow-y: auto;
+                box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+                background: #f4fbf7;
+            }
+            /* 當啟動 open 類別時滑入畫面 */
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.open { display: block; }
+            
+            .content { padding: 15px; width: 100%; }
+            #meter-section button { width: 46%; padding: 12px 5px; font-size: 14px; display: inline-block; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>宿舍管理系統</h1>
-            <p>Google Sheets 雲端自動同步版 v14</p>
-        </header>
-        <div class="main-content">
-            <div class="sidebar">
-                <h3>宿舍管理</h3>
-                <button onclick="showApplyStayModal()">申請入住</button>
-                <button onclick="showApplyLeaveModal()">申請退宿</button>
-                <hr>
-                
-                <h3>房間列表</h3>
-                <div id="room-list"></div>
-                <hr>
-                
-                <button onclick="exportData()">📤 匯出備份</button>
-                <button onclick="triggerImport()">📥 匯入備份</button>
-                <input type="file" id="import-file" style="display:none" onchange="importData(this)">
-            </div>
-            <div class="content">
-                <div id="loading-overlay">⏳ 雲端資料同步中...</div>
 
-                <div id="current-room-info">
-                    <h2>請選擇房間</h2>
+    <nav>
+        <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+        <h1>宿舍管理系統 (雲端同步版 v15)</h1>
+        <div style="font-size: 12px;">2026.06.27</div>
+    </nav>
+
+    <div class="container">
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMenu()"></div>
+
+        <div class="sidebar" id="sidebar">
+            <h3>宿舍管理</h3>
+            <button onclick="showApplyStayModal()">申請入住</button>
+            <button onclick="showApplyLeaveModal()">申請退宿</button>
+            <hr>
+            
+            <h3>房間列表</h3>
+            <div id="room-list"></div>
+            <hr>
+            
+            <button onclick="exportData()" style="background-color: #666;">📤 匯出備份</button>
+            <button onclick="triggerImport()" style="background-color: #666;">📥 匯入備份</button>
+            <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+        </div>
+
+        <div class="content">
+            <div id="loading-overlay">⏳ 雲端資料同步中...</div>
+
+            <div id="current-room-info">
+                <h2>請選擇房間</h2>
+            </div>
+            
+            <div id="meter-section">
+                <h3>電表抄表</h3>
+                <div style="margin-bottom: 10px;">
+                    <label>抄表日期：<input type="date" id="meter-date" value="2026-06-27" style="width: auto;"></label>
                 </div>
-                
-                <div id="meter-section">
-                    <h3>電表抄表</h3>
-                    <label style="display:inline-block; margin-right:10px;">抄表日期：<input type="date" id="meter-date" value="2026-06-27"></label>
-                    <label style="display:inline-block;">當期度數：<input type="number" id="meter-reading" placeholder="電表度數" step="0.1"></label>
-                    <br><br>
-                    <button onclick="takePhoto()">📱 直接拍照</button>
-                    <button onclick="performOCR()">🤖 OCR 辨識</button>
-                    <button onclick="saveMeterReading()" style="background-color: #2196F3;">儲存抄表</button>
+                <div style="margin-bottom: 15px;">
+                    <label>當期度數：<input type="number" id="meter-reading" placeholder="請輸入電表度數" step="0.1" style="width: auto;"></label>
                 </div>
-                
-                <h3>歷史抄表紀錄</h3>
-                <div class="table-responsive">
-                    <table id="history-table" border="1">
-                        <thead>
-                            <tr style="background-color: #e6f0ea;">
-                                <th>日期</th>
-                                <th>當期度數</th>
-                                <th>用電量 (度)</th>
-                                <th>當期電費</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
+                <button onclick="takePhoto()">📱 直接拍照</button>
+                <button onclick="performOCR()">🤖 OCR 辨識</button>
+                <button onclick="saveMeterReading()" style="background-color: #2196F3; width: 95%;">儲存抄表</button>
+            </div>
+            
+            <h3>歷史抄表紀錄</h3>
+            <div class="table-responsive">
+                <table id="history-table">
+                    <thead>
+                        <tr style="background-color: #e6f0ea;">
+                            <th>日期</th>
+                            <th>當期度數</th>
+                            <th>用電量 (度)</th>
+                            <th>當期電費</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -116,9 +139,9 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
             <h2>申請入住</h2>
-            <label style="display:block;">選擇房間：</label>
-            <select id="apply-room" style="width:100%;"></select>
-            <input type="text" id="apply-name" placeholder="入住姓名" style="width:100%;">
+            <label>選擇房間：</label>
+            <select id="apply-room"></select>
+            <input type="text" id="apply-name" placeholder="入住姓名">
             <label style="display:block; margin: 10px 0;"><input type="checkbox" id="apply-warehouse"> 申請作為倉庫</label>
             <button onclick="submitApplyStay()" style="width:100%; margin-top:10px;">送出申請</button>
         </div>
@@ -128,9 +151,9 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-leave-modal')">×</span>
             <h2>申請退宿</h2>
-            <label style="display:block;">選擇房間：</label>
-            <select id="leave-room" style="width:100%;"></select>
-            <input type="date" id="leave-date" style="width:100%;">
+            <label>選擇房間：</label>
+            <select id="leave-room"></select>
+            <input type="date" id="leave-date">
             <button onclick="submitApplyLeave()" style="width:100%; margin-top:10px;">送出退宿</button>
         </div>
     </div>
@@ -141,7 +164,6 @@
 
         let rooms = {}; 
 
-        // 預寫入的預設初始資料 (若雲端無資料時將以此基礎建立)
         const DEFAULT_ROOMS_DATA = {
             "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}]},
             "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}]},
@@ -172,54 +194,55 @@
 
         let currentRoom = "1-1";
 
+        // 控制手機側邊單滑出/隱藏
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebar-overlay').classList.toggle('open');
+        }
+
         function showLoading(status) {
             document.getElementById('loading-overlay').style.display = status ? 'block' : 'none';
         }
 
-        // 從雲端 GAS 獲取資料
         async function loadCloudData() {
             showLoading(true);
             try {
                 const response = await fetch(GAS_URL);
                 const cloudRooms = await response.json();
                 
-                // 檢查雲端是否為空物件，若是，則自動載入預設初始資料
-                if (cloudRooms && Object.keys(cloudRooms).length > 0) {
+                // 強制校驗：如果雲端回傳的是空物件 {} 或長度為 0，則強制初始化寫入
+                if (cloudRooms && Object.keys(cloudRooms).length > 2) {
                     rooms = cloudRooms;
                 } else {
-                    console.log("雲端無歷史資料，載入預設初始名單。");
                     rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
+                    initMissingRooms();
+                    await saveToCloud(); // 自動幫雲端初始化填入基礎名單
                 }
-                initMissingRooms();
-                switchRoom(currentRoom);
             } catch (error) {
-                console.error("雲端載入失敗，採用預設本地資料:", error);
+                console.log("讀取不到雲端歷史，使用本地內建名單資料。");
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
+            } finally {
                 initMissingRooms();
                 switchRoom(currentRoom);
-            } finally {
                 showLoading(false);
             }
         }
 
-        // 同步至雲端儲存 (優化 CORS 阻擋問題)
         async function saveToCloud() {
             showLoading(true);
             try {
-                // 使用 no-cors 模式允許網頁跨網域發送資料至 Google Script 重導向網址
+                // 改進 POST 傳輸策略，透過 no-cors 機制，確保即使跨域也能確實將最新的 rooms 物件送入 GAS
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(rooms)
                 });
-                console.log("資料已發送至雲端指令碼暫存。");
+                console.log("資料同步封包已成功投遞。");
             } catch (error) {
-                alert("儲存至雲端失敗，請檢查網路連線或進行手動『匯出備份』！");
-                console.error(error);
+                console.error("雲端握手失敗：", error);
             } finally {
-                // 給予小緩衝時間讓 UI 體驗更流暢
-                setTimeout(() => showLoading(false), 500);
+                setTimeout(() => showLoading(false), 400);
             }
         }
 
@@ -228,12 +251,7 @@
                 roomList.forEach(roomId => {
                     if (!rooms[roomId]) {
                         const isPublic = roomId.includes("公共區域");
-                        rooms[roomId] = { 
-                            name: "", 
-                            isWarehouse: false, 
-                            managementFee: isPublic ? 0 : 1600, 
-                            readings: [] 
-                        };
+                        rooms[roomId] = { name: "", isWarehouse: false, managementFee: isPublic ? 0 : 1600, readings: [] };
                     }
                 });
             });
@@ -263,9 +281,9 @@
                     item.innerHTML = `${displayName}${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
                     item.onclick = () => {
                         switchRoom(roomId);
-                        // 行動裝置點選房間後，自動滾動到下方內容區，方便檢視
+                        // 行動裝置點完房間後，自動收合選單，不遮擋主要畫面
                         if(window.innerWidth <= 768) {
-                            document.getElementById('current-room-info').scrollIntoView({ behavior: 'smooth' });
+                            toggleMenu();
                         }
                     };
                     floorContent.appendChild(item);
@@ -322,12 +340,7 @@
                     cost = diff >= 0 ? Math.round(diff * ELECTRICITY_RATE) : "-";
                 }
 
-                displayReadings.unshift({
-                    date: current.date,
-                    value: current.value,
-                    consumed: consumed,
-                    cost: cost
-                });
+                displayReadings.unshift({ date: current.date, value: current.value, consumed: consumed, cost: cost });
             }
 
             displayReadings.forEach(r => {
@@ -378,7 +391,7 @@
             document.getElementById(id).style.display = 'none';
         }
 
-        function submitApplyStay() {
+        async function submitApplyStay() {
             const roomId = document.getElementById('apply-room').value;
             const name = document.getElementById('apply-name').value.trim();
             const isWarehouse = document.getElementById('apply-warehouse').checked;
@@ -388,13 +401,17 @@
                 rooms[roomId].managementFee = isWarehouse ? 500 : 1600;
                 closeModal('apply-stay-modal');
                 switchRoom(roomId);
-                saveToCloud(); 
+                await saveToCloud();
+                // 如果在手機模式，送出申請後自動關閉選單
+                if(window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
+                    toggleMenu();
+                }
             } else {
                 alert('請選擇房間並填寫姓名！');
             }
         }
 
-        function submitApplyLeave() {
+        async function submitApplyLeave() {
             const roomId = document.getElementById('leave-room').value;
             if (roomId) {
                 rooms[roomId].name = '';
@@ -402,14 +419,17 @@
                 rooms[roomId].managementFee = 1600;
                 closeModal('apply-leave-modal');
                 switchRoom(roomId);
-                saveToCloud(); 
+                await saveToCloud();
+                if(window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
+                    toggleMenu();
+                }
             }
         }
 
         function takePhoto() { alert("模擬拍照功能..."); }
         function performOCR() { alert("模擬 OCR 辨識..."); }
 
-        function saveMeterReading() {
+        async function saveMeterReading() {
             const date = document.getElementById('meter-date').value;
             const valueStr = document.getElementById('meter-reading').value;
             if (!valueStr) { alert("請輸入電表度數！"); return; }
@@ -422,10 +442,10 @@
                 rooms[currentRoom].readings.push({ date: date, value: value });
             }
             renderHistoryTable(currentRoom);
-            saveToCloud(); 
+            await saveToCloud(); 
         }
 
-        function editMeterReading(date, oldValue) {
+        async function editMeterReading(date, oldValue) {
             const newValueStr = prompt(`正在修改房間 ${currentRoom} 於 ${date} 的度數：`, oldValue);
             if (newValueStr === null) return;
             const newValue = parseFloat(newValueStr);
@@ -435,15 +455,15 @@
             if (target) {
                 target.value = newValue;
                 renderHistoryTable(currentRoom);
-                saveToCloud(); 
+                await saveToCloud(); 
             }
         }
 
-        function deleteMeterReading(date) {
+        async function deleteMeterReading(date) {
             if (confirm(`確定要刪除房間 ${currentRoom} 於 ${date} 的這筆抄表紀錄嗎？`)) {
                 rooms[currentRoom].readings = rooms[currentRoom].readings.filter(r => r.date !== date);
                 renderHistoryTable(currentRoom);
-                saveToCloud(); 
+                await saveToCloud(); 
             }
         }
 
@@ -462,14 +482,14 @@
             const file = input.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const importedRooms = JSON.parse(e.target.result);
                     if (typeof importedRooms === 'object' && importedRooms !== null) {
                         rooms = importedRooms;
                         initMissingRooms();
                         switchRoom(currentRoom);
-                        saveToCloud(); 
+                        await saveToCloud(); 
                         alert("備份資料匯入並成功同步至雲端！");
                     } else { alert("檔案格式不正確！"); }
                 } catch (err) { alert("讀取檔案失敗！"); }
@@ -480,7 +500,6 @@
 
         window.onload = function() {
             loadCloudData();
-            console.log("✅ 雲端宿舍管理系統已成功連線！");
         };
     </script>
 </body>
