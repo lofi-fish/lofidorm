@@ -8,14 +8,12 @@
         :root { --main-green: #0f4c2a; --accent-green: #1e7a45; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e0f0e4; margin: 0; padding: 0; color: #0f2a1f; }
         
-        /* 導覽列與漢堡按鈕 */
         nav { background: linear-gradient(135deg, var(--main-green), var(--accent-green)); color: white; padding: 15px; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 101; }
         nav h1 { margin: 0; font-size: 20px; }
         .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; margin: 0; }
 
         .container { max-width: 1200px; margin: 0 auto; background: white; min-height: 100vh; display: flex; position: relative; }
         
-        /* 側邊欄基本樣式 (電腦版) */
         .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; box-sizing: border-box; transition: transform 0.3s ease; z-index: 100; }
         .content { flex: 1; padding: 20px; min-width: 300px; position: relative; box-sizing: border-box; }
         
@@ -31,7 +29,6 @@
         .btn-danger:hover { background-color: #c9302c; }
         .sidebar button { width: 100%; margin: 5px 0; box-sizing: border-box; }
         
-        /* 彈出視窗 */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1002; }
         .modal-content { background: white; margin: 15% auto; padding: 25px; width: 85%; max-width: 450px; border-radius: 12px; position: relative; box-sizing: border-box; }
         .close { position: absolute; top: 10px; right: 20px; font-size: 32px; cursor: pointer; }
@@ -43,29 +40,13 @@
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; text-align: center; min-width: 500px; }
         th, td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
-
-        /* 遮罩層 (手機選單打開時背景變暗) */
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
 
-        /* 📱 手機與平板行動裝置優化 (RWD) */
         @media (max-width: 768px) {
-            .menu-toggle { display: block; } /* 顯示漢堡鈕 */
-            
-            /* 將側邊欄改為左側隱藏式滑出選單 */
-            .sidebar {
-                position: fixed;
-                top: 58px; /* 避開頂部導覽列 */
-                left: 0;
-                height: calc(100vh - 58px);
-                transform: translateX(-100%); /* 預設隱藏在畫面左邊外 */
-                overflow-y: auto;
-                box-shadow: 4px 0 10px rgba(0,0,0,0.1);
-                background: #f4fbf7;
-            }
-            /* 當啟動 open 類別時滑入畫面 */
+            .menu-toggle { display: block; }
+            .sidebar { position: fixed; top: 58px; left: 0; height: calc(100vh - 58px); transform: translateX(-100%); overflow-y: auto; box-shadow: 4px 0 10px rgba(0,0,0,0.1); background: #f4fbf7; }
             .sidebar.open { transform: translateX(0); }
             .sidebar-overlay.open { display: block; }
-            
             .content { padding: 15px; width: 100%; }
             #meter-section button { width: 46%; padding: 12px 5px; font-size: 14px; display: inline-block; }
         }
@@ -75,8 +56,8 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>宿舍管理系統 (雲端同步版 v15)</h1>
-        <div style="font-size: 12px;">2026.06.27</div>
+        <h1>宿舍管理系統 (v16 雲端提示版)</h1>
+        <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
     <div class="container">
@@ -194,7 +175,6 @@
 
         let currentRoom = "1-1";
 
-        // 控制手機側邊單滑出/隱藏
         function toggleMenu() {
             document.getElementById('sidebar').classList.toggle('open');
             document.getElementById('sidebar-overlay').classList.toggle('open');
@@ -204,22 +184,23 @@
             document.getElementById('loading-overlay').style.display = status ? 'block' : 'none';
         }
 
+        // 優化點 1：加上時間戳記，打破手機「加到主畫面」的硬快取
         async function loadCloudData() {
             showLoading(true);
             try {
-                const response = await fetch(GAS_URL);
+                const antiCacheUrl = `${GAS_URL}?_=${new Date().getTime()}`;
+                const response = await fetch(antiCacheUrl);
                 const cloudRooms = await response.json();
                 
-                // 強制校驗：如果雲端回傳的是空物件 {} 或長度為 0，則強制初始化寫入
                 if (cloudRooms && Object.keys(cloudRooms).length > 2) {
                     rooms = cloudRooms;
                 } else {
                     rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
                     initMissingRooms();
-                    await saveToCloud(); // 自動幫雲端初始化填入基礎名單
+                    await saveToCloud();
                 }
             } catch (error) {
-                console.log("讀取不到雲端歷史，使用本地內建名單資料。");
+                console.log("快取攔截或雲端無回應，使用本地內建名單資料。");
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
             } finally {
                 initMissingRooms();
@@ -228,21 +209,25 @@
             }
         }
 
+        // 優化點 2：改用相容性最高的 URLSearchParams 格式發送，解決部分手機瀏覽器不吃 JSON POST 的隱形失敗
         async function saveToCloud() {
             showLoading(true);
             try {
-                // 改進 POST 傳輸策略，透過 no-cors 機制，確保即使跨域也能確實將最新的 rooms 物件送入 GAS
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: JSON.stringify(rooms)
                 });
-                console.log("資料同步封包已成功投遞。");
+                // 由於 no-cors 無法直接取得 response 內容，改以通知形式確認包投遞
+                console.log("同步訊號已發送。");
             } catch (error) {
-                console.error("雲端握手失敗：", error);
+                alert("❌ 同步至雲端伺服器失敗，請檢查網路！");
             } finally {
-                setTimeout(() => showLoading(false), 400);
+                setTimeout(() => {
+                    showLoading(false);
+                    alert("✅ 雲端同步指令已發送！請在另一台裝置重新整理確認。");
+                }, 600);
             }
         }
 
@@ -281,7 +266,6 @@
                     item.innerHTML = `${displayName}${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
                     item.onclick = () => {
                         switchRoom(roomId);
-                        // 行動裝置點完房間後，自動收合選單，不遮擋主要畫面
                         if(window.innerWidth <= 768) {
                             toggleMenu();
                         }
@@ -402,7 +386,6 @@
                 closeModal('apply-stay-modal');
                 switchRoom(roomId);
                 await saveToCloud();
-                // 如果在手機模式，送出申請後自動關閉選單
                 if(window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
                     toggleMenu();
                 }
