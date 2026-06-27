@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v24.3 長期申請優化版)</h1>
+        <h1>🏠 宿舍管理系統 (v24.3 長期申請優化版) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">更新時間：2026-06-27</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -95,7 +95,7 @@
             <h3>宿舍入住管理</h3>
             <button onclick="showApplyStayModal()">長期入住申請</button>
             <button onclick="showTempStayModal()" style="background-color: #2196F3;">臨時入住申請</button>
-            <button onclick="showTempStayList()" style="background-color: #0288d1; font-size: 14px; padding: 8px 12px;">📋 檢視臨時入住預約清單</button>
+            <button onclick="showTempStayList()" style="background-color: #01579b; font-size: 14px; padding: 8px 12px;">📋 檢視臨時入住預約清單</button>
             <button onclick="showSpecialRequestModal()" style="background-color: #7e57c2;">✨ 特殊需求申請</button>
             <button onclick="showApplyLeaveModal()">申請退宿清除</button>
             <hr>
@@ -168,6 +168,10 @@
             </label>
             <label>住宿大名：</label>
             <input type="text" id="temp-name" placeholder="請輸入實際住宿者姓名">
+            
+            <label>入住人數：</label>
+            <input type="number" id="temp-count" value="1" min="1" placeholder="請輸入入住總人數">
+            
             <label>預計入住日期：</label>
             <input type="date" id="temp-start-date" value="2026-06-27">
             <label>預計退房日期：</label>
@@ -299,15 +303,45 @@
         function checkAndProcessDateStatus() {
             Object.keys(rooms).forEach(roomId => {
                 const room = rooms[roomId];
-                if (room.leaveDate && room.leaveDate <= TODAY_STR) {
+                
+                // 如果是新型態的多筆臨時入住陣列，進行過期檢查
+                if (room.tempList && room.tempList.length > 0) {
+                    room.tempList = room.tempList.filter(t => !t.endDate || t.endDate > TODAY_STR);
+                    if (room.tempList.length === 0) {
+                        delete room.tempList;
+                        if(room.isTemp) {
+                            room.name = ''; room.isTemp = false; room.tempInfo = null; room.checkInDate = ''; room.leaveDate = '';
+                        }
+                    } else {
+                        // 重新排列，最近期更早入住的或符合當月最近期的排第一筆
+                        syncActiveTempRecord(roomId);
+                    }
+                } else if (room.leaveDate && room.leaveDate <= TODAY_STR) {
                     room.name = ''; room.isWarehouse = false; room.leaveDate = ''; room.isTemp = false; room.tempInfo = null; room.checkInDate = ''; room.isBookingFuture = false;
                     room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.leaveRetentionReason = ''; room.isWarden = false;
                     if(roomId === "1-7") room.isSecurityOnly = true; 
                 }
+                
                 if (room.isBookingFuture && room.checkInDate && room.checkInDate <= TODAY_STR) {
                     room.isBookingFuture = false;
                 }
             });
+        }
+
+        // 🟢 核心修正：同步並找出最符合當前狀態或最近更新的臨時入住記錄
+        function syncActiveTempRecord(roomId) {
+            const room = rooms[roomId];
+            if(!room || !room.tempList || room.tempList.length === 0) return;
+            
+            // 排序條件：找出在今天之後且最近期入住，或者依據最後更新（這裡以陣列最後一筆作為最近更新記錄做預備）
+            // 規則：優先顯示「當月」或最靠近當前的臨時入住
+            let activeTemp = room.tempList[room.tempList.length - 1]; // 預設拿最近新增的那筆
+            
+            room.name = activeTemp.name;
+            room.isTemp = true;
+            room.checkInDate = activeTemp.startDate;
+            room.leaveDate = activeTemp.endDate;
+            room.tempInfo = activeTemp;
         }
 
         async function loadCloudData() {
@@ -432,14 +466,13 @@
                     
                     let displayName = roomId; let tags = ''; let isEmpty = false;
 
-                    // 處理房間列表姓名顯示 (優先判斷臨時入住)
                     if (roomId.includes("公共區域") || roomId.includes("公共開放區域")) {
                         displayName = roomId;
                     } else if (room.isSpecialLock) {
                         displayName = `${roomId} 備品室`;
                         tags += '<span class="tag tag-special">管制</span>';
                     } else if (room.isTemp && room.tempInfo) {
-                        // 🟢 更正顯示為臨時入住大名
+                        // 🟢 優先顯示最新/當期有效的臨時入住大名
                         displayName = `${roomId} ${room.name || room.tempInfo.name || ''}`;
                     } else if (room.name) {
                         let nameStr = room.name;
@@ -464,7 +497,7 @@
                             if (room.isWarehouse && !room.isLeaveRetention) { tags += '<span class="tag tag-warehouse">倉庫</span>'; }
                             if (room.hasRoommate) { tags += '<span class="tag tag-special" style="background:#00bcd4;">雙人同住</span>'; }
                             
-                            // 🟢 臨時入住標籤變更為：『日期＋臨時』ex. 7/12臨時
+                            // 臨時入住標籤變更為：『日期＋臨時』ex. 7/12臨時
                             if (room.isTemp) { 
                                 let dateLabel = "";
                                 if(room.tempInfo && room.tempInfo.startDate) {
@@ -608,8 +641,9 @@
             if(room.isTemp && room.tempInfo) {
                 extendedInfoHtml = `
                     <div style="background: #eef7ff; padding:12px; border-radius:6px; margin: 10px 0; border:1px solid #b3d7ff; font-size:14px;">
-                        <b>📋 臨時入住詳細登記：</b><br>
-                        • 申請人：${room.tempInfo.applicant} | 入住期間：${room.tempInfo.startDate} ~ ${room.tempInfo.endDate}<br>
+                        <b>📋 臨時入住詳細登記（當前最靠近/最近更新）：</b><br>
+                        • 申請人：${room.tempInfo.applicant} | 住宿大名：${room.tempInfo.name} (共 ${room.tempInfo.guestCount || 1} 人)<br>
+                        • 入住期間：${room.tempInfo.startDate} ~ ${room.tempInfo.endDate}<br>
                         • 登記原因：${room.tempInfo.reason}
                     </div>
                 `;
@@ -749,7 +783,7 @@
                     } else if (roomId.includes("公共區域") || roomId.includes("公共開放區域")) {
                         typeLabel = "公共開放區域";
                     } else if (room.isTemp) {
-                        typeLabel = `${room.name}(臨時入住)`;
+                        typeLabel = `${room.name}(臨時-${room.tempInfo?.guestCount || 1}人)`;
                     } else if (room.name && !skipMgmt) {
                         let baseMonthlyFee = configParams.mgmtFee || 1600;
                         if (roomId === "5-1") baseMonthlyFee = configParams.suiteFee || 2400;
@@ -933,7 +967,7 @@
 
             const room = rooms[roomId];
             room.name = name; room.checkInDate = checkInDate;
-            room.isTemp = false; room.tempInfo = null; room.leaveDate = '';
+            room.isTemp = false; room.tempInfo = null; room.leaveDate = ''; delete room.tempList;
             room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.isWarden = false;
 
             if(specType === 'WAREHOUSE') { room.isWarehouse = true; }
@@ -956,14 +990,15 @@
         function showTempStayModal() {
             const select = document.getElementById('temp-room'); if(!select) return;
             select.innerHTML = '';
-            Object.keys(rooms).forEach(roomId => {
-                if (!rooms[roomId].isSpecialLock && (!rooms[roomId].name || rooms[roomId].isTemp) && !roomId.includes("公共區域") && !roomId.includes("公共開放區域")) {
+            Object.keys(rooms).sort().forEach(roomId => {
+                if (!rooms[roomId].isSpecialLock && !roomId.includes("公共區域") && !roomId.includes("公共開放區域")) {
                     const option = document.createElement('option'); option.value = roomId;
                     option.textContent = rooms[roomId].isDriverOnly ? `${roomId} (司領房專用)` : roomId;
                     select.appendChild(option);
                 }
             });
             document.getElementById('temp-applicant').value = ''; document.getElementById('temp-name').value = '';
+            document.getElementById('temp-count').value = '1';
             document.getElementById('temp-same-person').checked = false;
             document.getElementById('temp-start-date').value = TODAY_STR;
             document.getElementById('temp-end-date').value = "2026-06-28";
@@ -976,6 +1011,7 @@
             const roomId = document.getElementById('temp-room').value;
             const applicant = document.getElementById('temp-applicant').value.trim();
             const name = document.getElementById('temp-name').value.trim();
+            const guestCount = parseInt(document.getElementById('temp-count').value) || 1;
             const startDate = document.getElementById('temp-start-date').value;
             const endDate = document.getElementById('temp-end-date').value;
             
@@ -990,18 +1026,25 @@
             }
 
             const room = rooms[roomId];
-            room.name = name;
-            room.isTemp = true;
-            room.checkInDate = startDate;
-            room.leaveDate = endDate; 
             
-            room.tempInfo = {
+            // 🟢 核心修正：初始化臨時入住陣列，允許儲存多筆不同時段的紀錄
+            if(!room.tempList) {
+                room.tempList = [];
+            }
+            
+            const newRecord = {
                 applicant: applicant || name,
+                name: name,
+                guestCount: guestCount,
                 startDate: startDate,
                 endDate: endDate,
-                reason: reason
+                reason: reason,
+                timestamp: new Date().getTime()
             };
+            
+            room.tempList.push(newRecord);
 
+            // 清理常規常駐標記，轉換為臨時狀態
             room.isWarehouse = false;
             room.isSecurityOnly = false;
             room.hasRoommate = false;
@@ -1009,6 +1052,9 @@
             room.isLeaveRetention = false;
             room.isWarden = false;
             room.isBookingFuture = false;
+
+            // 自動篩選並同步當前最合適的顯示紀錄
+            syncActiveTempRecord(roomId);
 
             closeModal('temp-stay-modal');
             switchRoom(roomId);
@@ -1025,12 +1071,40 @@
             let listRowsHtml = "";
             let count = 0;
 
+            // 🟢 全面循環檢索所有房間內的所有預約紀錄，讓不同的預期時間都能呈現在總表中
             Object.keys(rooms).sort().forEach(roomId => {
                 const room = rooms[roomId];
-                if(room.isTemp && room.tempInfo) {
+                
+                // 優先解析數組紀錄
+                if(room.tempList && room.tempList.length > 0) {
+                    room.tempList.forEach(info => {
+                        count++;
+                        let days = "-";
+                        if(info.startDate && info.endDate) {
+                            const diffTime = Math.abs(new Date(info.endDate) - new Date(info.startDate));
+                            days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + " 天";
+                        }
+
+                        listRowsHtml += `
+                            <tr>
+                                <td><b>${roomId}</b></td>
+                                <td><span style="background:#2196F3; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${info.name}</span></td>
+                                <td>${info.guestCount || 1} 人</td>
+                                <td>${info.applicant || '-'}</td>
+                                <td>${info.startDate}</td>
+                                <td>${info.endDate}</td>
+                                <td><span style="color:#e65100; font-weight:bold;">${days}</span></td>
+                                <td style="text-align:left; padding-left:10px;">${info.reason || '-'}</td>
+                                <td>
+                                    <button onclick="switchRoom('${roomId}')" style="padding:4px 8px; font-size:12px; background:#4caf50;">前往房間</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else if(room.isTemp && room.tempInfo) {
+                    // 相容舊資料格式
                     count++;
                     const info = room.tempInfo;
-                    
                     let days = "-";
                     if(info.startDate && info.endDate) {
                         const diffTime = Math.abs(new Date(info.endDate) - new Date(info.startDate));
@@ -1041,6 +1115,7 @@
                         <tr>
                             <td><b>${roomId}</b></td>
                             <td><span style="background:#2196F3; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${room.name}</span></td>
+                            <td>${info.guestCount || 1} 人</td>
                             <td>${info.applicant || '-'}</td>
                             <td>${info.startDate}</td>
                             <td>${info.endDate}</td>
@@ -1055,7 +1130,7 @@
             });
 
             if(count === 0) {
-                listRowsHtml = `<tr><td colspan="8" style="color:gray; padding:30px; font-size:15px;">🔍 目前系統中暫無任何臨時入住登記資料。</td></tr>`;
+                listRowsHtml = `<tr><td colspan="9" style="color:gray; padding:30px; font-size:15px;">🔍 目前系統中暫無任何臨時入住登記資料。</td></tr>`;
             }
 
             displayArea.innerHTML = `
@@ -1064,7 +1139,7 @@
                         <h3 style="margin: 0; color: #0d47a1; font-size:20px;">📋 宿舍臨時入住預約總清冊</h3>
                         <button onclick="showDefaultHome()" style="background:#6c757d; padding:8px 12px; font-size:13px; margin:0;">⬅️ 返回財務清冊首頁</button>
                     </div>
-                    <p style="font-size:13px; color:#555; margin-top:-10px;">💡 說明：以下列出所有目前正在住宿或未來已預約的臨時入住人員。到期後系統會於隔日自動清除該房狀態。</p>
+                    <p style="font-size:13px; color:#555; margin-top:-10px;">💡 說明：以下列出所有目前正在住宿或未來已預約的臨時入住人員。到期後系統會自動清除該房狀態。</p>
                     
                     <div class="table-responsive">
                         <table>
@@ -1072,6 +1147,7 @@
                                 <tr style="background-color: #d1e8ff; color: #0d47a1;">
                                     <th>房間</th>
                                     <th>住宿大名</th>
+                                    <th>人數</th>
                                     <th>申請人</th>
                                     <th>預計入住日</th>
                                     <th>預計退房日</th>
@@ -1165,7 +1241,7 @@
 
             if(type === 'NORMAL') {
                 room.isWarehouse = false; room.isSecurityOnly = false; room.hasRoommate = false; room.roommateName = ''; room.isLeaveRetention = false; room.leaveRetentionReason = ''; room.isWarden = false;
-                room.leaveRetentionStart = ''; room.leaveRetentionEnd = ''; room.leaveRetentionPrepaid = 0;
+                room.leaveRetentionStart = ''; room.leaveRetentionEnd = ''; room.leaveRetentionPrepaid = 0; delete room.tempList;
             } else if(type === 'WAREHOUSE') { 
                 room.isWarehouse = true; room.isSecurityOnly = false; room.isLeaveRetention = false; room.isWarden = false;
             } else if(type === 'SECURITY') { 
@@ -1226,6 +1302,7 @@
                 rooms[roomId].isTemp = false; rooms[roomId].tempInfo = null; rooms[roomId].checkInDate = ''; rooms[roomId].isBookingFuture = false;
                 rooms[roomId].isSecurityOnly = false; rooms[roomId].hasRoommate = false; rooms[roomId].roommateName = '';
                 rooms[roomId].isLeaveRetention = false; rooms[roomId].leaveRetentionReason = ''; rooms[roomId].isWarden = false;
+                delete rooms[roomId].tempList;
                 alert(`房間 ${roomId} 資料已立刻執行退宿清除。`);
             } else {
                 rooms[roomId].leaveDate = leaveDateInput;
