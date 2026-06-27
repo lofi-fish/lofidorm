@@ -14,6 +14,7 @@
         .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; height: 100vh; overflow-y: auto; }
         .content { flex: 1; padding: 20px; min-width: 300px; }
         .floor-header { padding: 12px 15px; background: var(--main-green); color: white; font-weight: bold; margin: 8px 0 4px; border-radius: 8px; cursor: pointer; }
+        .floor-content { display: block; }
         .room-item { padding: 12px 15px; margin: 4px 0; background: white; border-radius: 8px; cursor: pointer; border: 1px solid #ddd; }
         .room-item:hover, .room-item.active { background: #b0d4b8; }
         .warehouse-tag { background: #ff9800; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-left: 8px; }
@@ -27,7 +28,7 @@
     <div class="container">
         <header>
             <h1>宿舍管理系統</h1>
-            <p>Google Sheets 雲端同步版 2026.06.27 v7</p>
+            <p>Google Sheets 雲端版 2026.06.27 v8</p>
         </header>
         <div class="main-content">
             <div class="sidebar">
@@ -68,10 +69,10 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
             <h2>申請入住</h2>
-            <select id="apply-room"></select>
-            <input type="text" id="apply-name" placeholder="入住姓名">
+            <select id="apply-room" style="width:100%; padding:8px; margin:10px 0;"></select>
+            <input type="text" id="apply-name" placeholder="入住姓名" style="width:100%; padding:8px; margin:10px 0;">
             <label><input type="checkbox" id="apply-warehouse"> 申請作為倉庫</label>
-            <button onclick="submitApplyStay()">送出申請</button>
+            <button onclick="submitApplyStay()" style="width:100%; margin-top:10px;">送出申請</button>
         </div>
     </div>
 
@@ -79,20 +80,16 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-leave-modal')">×</span>
             <h2>申請退宿</h2>
-            <select id="leave-room"></select>
-            <input type="date" id="leave-date">
-            <button onclick="submitApplyLeave()">送出退宿</button>
+            <select id="leave-room" style="width:100%; padding:8px; margin:10px 0;"></select>
+            <input type="date" id="leave-date" style="width:100%; padding:8px; margin:10px 0;">
+            <button onclick="submitApplyLeave()" style="width:100%; margin-top:10px;">送出退宿</button>
         </div>
     </div>
 
     <script>
         const SHEET_URL = "https://script.google.com/macros/s/AKfycbwuJDYtXooyFqCf-z3YqaZRTSkLTB7lrJJzP2SMpjsjQxI8WDFIvOQTW_crj-nMfXxbtQ/exec";
 
-        let rooms = {};
-        let currentRoom = "1-1";
-
-        // 你的房間資料
-        const defaultRooms = {
+        let rooms = {
             "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}]},
             "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}]},
             "1-3": {name: "劉雨婷", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1886.3}]},
@@ -113,16 +110,7 @@
             "公共區域B": {name: "", isWarehouse: false, managementFee: 0, readings: []}
         };
 
-        async function loadRooms() {
-            try {
-                const response = await fetch(SHEET_URL);
-                const data = await response.json();
-                console.log("從 Google Sheets 載入資料", data);
-            } catch (e) {
-                console.log("使用本地預設資料");
-            }
-            renderRoomList();
-        }
+        let currentRoom = "1-1";
 
         function renderRoomList() {
             const list = document.getElementById('room-list');
@@ -137,11 +125,12 @@
             };
             Object.keys(floors).forEach(floorName => {
                 const floorDiv = document.createElement('div');
-                floorDiv.innerHTML = `<div class="floor-header">${floorName}</div>`;
+                floorDiv.innerHTML = `<div class="floor-header" onclick="toggleFloor(this)">${floorName}</div>`;
                 const floorContent = document.createElement('div');
-                floorContent.style.marginLeft = '10px';
+                floorContent.className = 'floor-content';
+                floorContent.style.display = 'block';
                 floors[floorName].forEach(roomId => {
-                    const room = defaultRooms[roomId] || {};
+                    const room = rooms[roomId] || {};
                     const item = document.createElement('div');
                     item.className = `room-item ${roomId === currentRoom ? 'active' : ''}`;
                     item.innerHTML = `${roomId} ${room.name || '(空房)'}${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
@@ -153,10 +142,15 @@
             });
         }
 
+        function toggleFloor(el) {
+            const content = el.nextElementSibling;
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        }
+
         function switchRoom(roomId) {
             currentRoom = roomId;
             renderRoomList();
-            const room = defaultRooms[roomId] || {};
+            const room = rooms[roomId] || {};
             document.getElementById('current-room-info').innerHTML = `
                 <h2>${roomId} ${room.name || '(空房)'}</h2>
                 ${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}
@@ -165,10 +159,30 @@
         }
 
         function showApplyStayModal() {
+            const select = document.getElementById('apply-room');
+            select.innerHTML = '';
+            Object.keys(rooms).forEach(key => {
+                if (!rooms[key].name) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = key;
+                    select.appendChild(option);
+                }
+            });
             document.getElementById('apply-stay-modal').style.display = 'block';
         }
 
         function showApplyLeaveModal() {
+            const select = document.getElementById('leave-room');
+            select.innerHTML = '';
+            Object.keys(rooms).forEach(key => {
+                if (rooms[key].name) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = `${key} - ${rooms[key].name}`;
+                    select.appendChild(option);
+                }
+            });
             document.getElementById('apply-leave-modal').style.display = 'block';
         }
 
@@ -199,7 +213,7 @@
         }
 
         function exportData() {
-            const dataStr = JSON.stringify(defaultRooms, null, 2);
+            const dataStr = JSON.stringify(rooms, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
             const link = document.createElement('a');
             link.setAttribute('href', dataUri);
@@ -218,7 +232,7 @@
         window.onload = function() {
             renderRoomList();
             switchRoom("1-1");
-            console.log("✅ Google Sheets 版本已載入！");
+            console.log("✅ 宿舍管理系統已載入！");
         };
     </script>
 </body>
