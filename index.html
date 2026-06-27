@@ -28,7 +28,7 @@
     <div class="container">
         <header>
             <h1>宿舍管理系統</h1>
-            <p>Google Sheets 雲端版 2026.06.27 v8</p>
+            <p>Google Sheets 雲端版 2026.06.27 v9</p>
         </header>
         <div class="main-content">
             <div class="sidebar">
@@ -87,8 +87,6 @@
     </div>
 
     <script>
-        const SHEET_URL = "https://script.google.com/macros/s/AKfycbwuJDYtXooyFqCf-z3YqaZRTSkLTB7lrJJzP2SMpjsjQxI8WDFIvOQTW_crj-nMfXxbtQ/exec";
-
         let rooms = {
             "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}]},
             "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}]},
@@ -191,13 +189,31 @@
         }
 
         function submitApplyStay() {
-            alert("申請入住成功！");
-            closeModal('apply-stay-modal');
+            const roomId = document.getElementById('apply-room').value;
+            const name = document.getElementById('apply-name').value.trim();
+            const isWarehouse = document.getElementById('apply-warehouse').checked;
+            if (roomId && name) {
+                rooms[roomId].name = name;
+                rooms[roomId].isWarehouse = isWarehouse;
+                rooms[roomId].managementFee = isWarehouse ? 500 : 1600;
+                closeModal('apply-stay-modal');
+                renderRoomList();  // 立即更新房間列表
+                alert('申請入住成功！房間列表已更新');
+            } else {
+                alert('請填寫姓名！');
+            }
         }
 
         function submitApplyLeave() {
-            alert("申請退宿成功！");
-            closeModal('apply-leave-modal');
+            const roomId = document.getElementById('leave-room').value;
+            if (roomId) {
+                rooms[roomId].name = '';
+                rooms[roomId].isWarehouse = false;
+                rooms[roomId].managementFee = 1600;
+                closeModal('apply-leave-modal');
+                renderRoomList();  // 立即更新房間列表
+                alert('退宿申請成功！房間列表已更新');
+            }
         }
 
         function takePhoto() {
