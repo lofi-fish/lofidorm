@@ -11,7 +11,7 @@
         header { background: linear-gradient(135deg, var(--main-green), var(--accent-green)); color: white; padding: 20px; text-align: center; }
         h1 { margin: 0; font-size: 28px; }
         .main-content { display: flex; flex-wrap: wrap; }
-        .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; height: 100vh; overflow-y: auto; }
+        .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; box-sizing: border-box; }
         .content { flex: 1; padding: 20px; min-width: 300px; }
         .floor-header { padding: 12px 15px; background: var(--main-green); color: white; font-weight: bold; margin: 8px 0 4px; border-radius: 8px; cursor: pointer; }
         .floor-content { display: block; }
@@ -19,16 +19,19 @@
         .room-item:hover, .room-item.active { background: #b0d4b8; }
         .warehouse-tag { background: #ff9800; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-left: 8px; }
         button { padding: 10px 16px; border: none; border-radius: 6px; background: var(--accent-green); color: white; cursor: pointer; margin: 5px; }
+        button:hover { background: #0f4c2a; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
         .modal-content { background: white; margin: 5% auto; padding: 25px; width: 90%; max-width: 500px; border-radius: 12px; position: relative; }
         .close { position: absolute; top: 10px; right: 20px; font-size: 32px; cursor: pointer; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin: 5px 0; }
+        #meter-section { background: #f4fdf7; padding: 15px; border-radius: 8px; border: 1px solid #b0d4b8; margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>宿舍管理系統</h1>
-            <p>Google Sheets 雲端版 2026.06.27 v9</p>
+            <p>Google Sheets 雲端版 2026.06.27 v11-gemini接手</p>
         </header>
         <div class="main-content">
             <div class="sidebar">
@@ -38,40 +41,50 @@
                 <h3>宿舍管理</h3>
                 <button onclick="showApplyStayModal()">申請入住</button>
                 <button onclick="showApplyLeaveModal()">申請退宿</button>
-                <button onclick="showHistoryModal()">歷史紀錄</button>
                 <hr>
                 <button onclick="exportData()">📤 匯出備份</button>
-                <button onclick="importData()">📥 匯入備份</button>
+                <button onclick="triggerImport()">📥 匯入備份</button>
+                <input type="file" id="import-file" style="display:none" onchange="importData(this)">
             </div>
             <div class="content">
                 <div id="current-room-info">
                     <h2>請選擇房間</h2>
                 </div>
+                
                 <div id="meter-section">
                     <h3>電表抄表</h3>
-                    <input type="date" id="meter-date" value="2026-06-27">
-                    <input type="number" id="meter-reading" placeholder="電表度數" step="0.1">
+                    <label>抄表日期：<input type="date" id="meter-date" value="2026-06-27"></label>
+                    <label>當期度數：<input type="number" id="meter-reading" placeholder="電表度數" step="0.1"></label>
+                    <br><br>
                     <button onclick="takePhoto()">📱 直接拍照</button>
                     <button onclick="performOCR()">🤖 OCR 辨識</button>
-                    <button onclick="saveMeterReading()">儲存抄表</button>
+                    <button onclick="saveMeterReading()" style="background-color: #2196F3;">儲存抄表</button>
                 </div>
+                
                 <h3>歷史抄表紀錄</h3>
-                <table id="history-table" border="1" style="width:100%; border-collapse: collapse;">
-                    <thead><tr><th>日期</th><th>度數</th><th>用電量</th><th>電費</th></tr></thead>
+                <table id="history-table" border="1" style="width:100%; border-collapse: collapse; text-align: center;">
+                    <thead>
+                        <tr style="background-color: #e6f0ea;">
+                            <th>日期</th>
+                            <th>當期度數</th>
+                            <th>用電量 (度)</th>
+                            <th>當期電費</th>
+                        </tr>
+                    </thead>
                     <tbody></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- Modals -->
     <div id="apply-stay-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
             <h2>申請入住</h2>
-            <select id="apply-room" style="width:100%; padding:8px; margin:10px 0;"></select>
-            <input type="text" id="apply-name" placeholder="入住姓名" style="width:100%; padding:8px; margin:10px 0;">
-            <label><input type="checkbox" id="apply-warehouse"> 申請作為倉庫</label>
+            <label style="display:block;">選擇房間：</label>
+            <select id="apply-room" style="width:100%;"></select>
+            <input type="text" id="apply-name" placeholder="入住姓名" style="width:100%;">
+            <label style="display:block; margin: 10px 0;"><input type="checkbox" id="apply-warehouse"> 申請作為倉庫</label>
             <button onclick="submitApplyStay()" style="width:100%; margin-top:10px;">送出申請</button>
         </div>
     </div>
@@ -80,13 +93,17 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-leave-modal')">×</span>
             <h2>申請退宿</h2>
-            <select id="leave-room" style="width:100%; padding:8px; margin:10px 0;"></select>
-            <input type="date" id="leave-date" style="width:100%; padding:8px; margin:10px 0;">
+            <label style="display:block;">選擇房間：</label>
+            <select id="leave-room" style="width:100%;"></select>
+            <input type="date" id="leave-date" style="width:100%;">
             <button onclick="submitApplyLeave()" style="width:100%; margin-top:10px;">送出退宿</button>
         </div>
     </div>
 
     <script>
+        // 每度電費率設定
+        const ELECTRICITY_RATE = 5; 
+
         let rooms = {
             "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}]},
             "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}]},
@@ -128,7 +145,7 @@
                 floorContent.className = 'floor-content';
                 floorContent.style.display = 'block';
                 floors[floorName].forEach(roomId => {
-                    const room = rooms[roomId] || {};
+                    const room = rooms[roomId] || {name: "", isWarehouse: false, managementFee: 1600, readings: []};
                     const item = document.createElement('div');
                     item.className = `room-item ${roomId === currentRoom ? 'active' : ''}`;
                     item.innerHTML = `${roomId} ${room.name || '(空房)'}${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
@@ -145,15 +162,67 @@
             content.style.display = content.style.display === 'none' ? 'block' : 'none';
         }
 
+        // 切換房間並更新右側資訊欄與歷史表格
         function switchRoom(roomId) {
             currentRoom = roomId;
             renderRoomList();
-            const room = rooms[roomId] || {};
+            const room = rooms[roomId] || {name: "", isWarehouse: false, managementFee: 1600, readings: []};
             document.getElementById('current-room-info').innerHTML = `
                 <h2>${roomId} ${room.name || '(空房)'}</h2>
                 ${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}
                 <p>管理費: ${room.managementFee} 元</p>
             `;
+            document.getElementById('meter-reading').value = ''; // 清空輸入框
+            renderHistoryTable(roomId);
+        }
+
+        // 渲染抄表歷史紀錄，並自動計算相鄰兩期的用電量與電費
+        function renderHistoryTable(roomId) {
+            const tbody = document.querySelector('#history-table tbody');
+            tbody.innerHTML = '';
+            const room = rooms[roomId];
+            if (!room || !room.readings || room.readings.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="color:gray; padding:10px;">暫無抄表紀錄</td></tr>`;
+                return;
+            }
+
+            // 按日期由舊到新排序，方便計算用電量
+            let sortedReadings = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // 渲染時從新到舊顯示 (反轉陣列)
+            let displayReadings = [];
+            
+            for (let i = 0; i < sortedReadings.length; i++) {
+                let current = sortedReadings[i];
+                let consumed = "-";
+                let cost = "-";
+
+                // 如果有上一期，就計算相差度數
+                if (i > 0) {
+                    let previous = sortedReadings[i - 1];
+                    let diff = current.value - previous.value;
+                    consumed = diff >= 0 ? diff.toFixed(1) : "度數異常(小於上期)";
+                    cost = diff >= 0 ? Math.round(diff * ELECTRICITY_RATE) : "-";
+                }
+
+                displayReadings.unshift({
+                    date: current.date,
+                    value: current.value,
+                    consumed: consumed,
+                    cost: cost
+                });
+            }
+
+            displayReadings.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="padding:8px;">${r.date}</td>
+                    <td>${r.value}</td>
+                    <td>${r.consumed}</td>
+                    <td>${r.cost !== "-" ? r.cost + ' 元' : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
         function showApplyStayModal() {
@@ -193,14 +262,15 @@
             const name = document.getElementById('apply-name').value.trim();
             const isWarehouse = document.getElementById('apply-warehouse').checked;
             if (roomId && name) {
+                if(!rooms[roomId]) rooms[roomId] = { readings: [] };
                 rooms[roomId].name = name;
                 rooms[roomId].isWarehouse = isWarehouse;
                 rooms[roomId].managementFee = isWarehouse ? 500 : 1600;
                 closeModal('apply-stay-modal');
-                renderRoomList();  // 立即更新房間列表
-                alert('申請入住成功！房間列表已更新');
+                switchRoom(roomId);
+                alert('申請入住成功！');
             } else {
-                alert('請填寫姓名！');
+                alert('請選擇房間並填寫姓名！');
             }
         }
 
@@ -211,21 +281,39 @@
                 rooms[roomId].isWarehouse = false;
                 rooms[roomId].managementFee = 1600;
                 closeModal('apply-leave-modal');
-                renderRoomList();  // 立即更新房間列表
-                alert('退宿申請成功！房間列表已更新');
+                switchRoom(roomId);
+                alert('退宿申請成功！');
             }
         }
 
-        function takePhoto() {
-            alert("拍照功能");
-        }
+        function takePhoto() { alert("模擬拍照功能：已開啟相機...（此功能需對接原生手機套件）"); }
+        function performOCR() { alert("模擬 OCR 辨識：辨識成功，電表度數為 4215.3"); document.getElementById('meter-reading').value = 4215.3; }
 
-        function performOCR() {
-            alert("OCR 辨識功能");
-        }
-
+        // 儲存抄表功能
         function saveMeterReading() {
-            alert("抄表已儲存！");
+            const date = document.getElementById('meter-date').value;
+            const valueStr = document.getElementById('meter-reading').value;
+            
+            if (!valueStr) {
+                alert("請輸入電表度數！");
+                return;
+            }
+            const value = parseFloat(valueStr);
+
+            if (!rooms[currentRoom].readings) {
+                rooms[currentRoom].readings = [];
+            }
+
+            // 檢查是否同一個日期已經抄表過，有就覆蓋，沒有就新增
+            const existingIndex = rooms[currentRoom].readings.findIndex(r => r.date === date);
+            if (existingIndex !== -1) {
+                rooms[currentRoom].readings[existingIndex].value = value;
+            } else {
+                rooms[currentRoom].readings.push({ date: date, value: value });
+            }
+
+            alert(`${currentRoom} 房間於 ${date} 的抄表度數 ${value} 已儲存！`);
+            renderHistoryTable(currentRoom); // 即時更新歷史列表
         }
 
         function exportData() {
@@ -233,16 +321,37 @@
             const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
             const link = document.createElement('a');
             link.setAttribute('href', dataUri);
-            link.setAttribute('download', 'dorm_backup.json');
+            link.setAttribute('download', `dorm_backup_${new Date().toISOString().slice(0,10)}.json`);
             link.click();
         }
 
-        function importData() {
-            alert("請選擇 JSON 備份檔案");
+        function triggerImport() {
+            document.getElementById('import-file').click();
         }
 
-        function showHistoryModal() {
-            alert("歷史紀錄功能");
+        // 匯入備份功能
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedRooms = JSON.parse(e.target.result);
+                    // 簡單驗證資料格式
+                    if (typeof importedRooms === 'object' && importedRooms !== null) {
+                        rooms = importedRooms;
+                        switchRoom(currentRoom);
+                        alert("備份資料匯入成功！");
+                    } else {
+                        alert("檔案格式不正確！");
+                    }
+                } catch (err) {
+                    alert("讀取檔案失敗，請確保這是正確的 JSON 備份檔。");
+                }
+            };
+            reader.readAsText(file);
+            input.value = ''; // 清空以利下次重複觸發
         }
 
         window.onload = function() {
