@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v24.3 長期申請優化版) 2026.06.27</h1>
+        <h1>🏠 宿舍管理系統 (v24.3 長期申請優化版)</h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -432,11 +432,15 @@
                     
                     let displayName = roomId; let tags = ''; let isEmpty = false;
 
+                    // 處理房間列表姓名顯示 (優先判斷臨時入住)
                     if (roomId.includes("公共區域") || roomId.includes("公共開放區域")) {
                         displayName = roomId;
                     } else if (room.isSpecialLock) {
                         displayName = `${roomId} 備品室`;
                         tags += '<span class="tag tag-special">管制</span>';
+                    } else if (room.isTemp && room.tempInfo) {
+                        // 🟢 更正顯示為臨時入住大名
+                        displayName = `${roomId} ${room.name || room.tempInfo.name || ''}`;
                     } else if (room.name) {
                         let nameStr = room.name;
                         if(room.hasRoommate && room.roommateName) nameStr += ` + ${room.roommateName}`;
@@ -459,7 +463,19 @@
                             if (room.isSecurityOnly) { tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>'; }
                             if (room.isWarehouse && !room.isLeaveRetention) { tags += '<span class="tag tag-warehouse">倉庫</span>'; }
                             if (room.hasRoommate) { tags += '<span class="tag tag-special" style="background:#00bcd4;">雙人同住</span>'; }
-                            if (room.isTemp) { tags += '<span class="tag tag-temp">⏳ 臨時</span>'; }
+                            
+                            // 🟢 臨時入住標籤變更為：『日期＋臨時』ex. 7/12臨時
+                            if (room.isTemp) { 
+                                let dateLabel = "";
+                                if(room.tempInfo && room.tempInfo.startDate) {
+                                    const dParts = room.tempInfo.startDate.split('-');
+                                    if(dParts.length === 3) {
+                                        dateLabel = `${parseInt(dParts[1])}/${parseInt(dParts[2])} `;
+                                    }
+                                }
+                                tags += `<span class="tag tag-temp">${dateLabel}臨時</span>`; 
+                            }
+                            
                             if (room.leaveDate && !room.isTemp) { tags += `<span class="tag tag-leave">預退</span>`; }
                         }
                     }
@@ -999,7 +1015,6 @@
             await saveToCloud();
         }
 
-        // 🟢 新增：檢視臨時入住預約清單
         function showTempStayList() {
             currentActiveView = "temp_list";
             renderRoomList();
@@ -1016,7 +1031,6 @@
                     count++;
                     const info = room.tempInfo;
                     
-                    // 計算入住天數差異
                     let days = "-";
                     if(info.startDate && info.endDate) {
                         const diffTime = Math.abs(new Date(info.endDate) - new Date(info.startDate));
