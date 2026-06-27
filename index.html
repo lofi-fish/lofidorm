@@ -56,7 +56,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>宿舍管理系統 (v16 雲端提示版)</h1>
+        <h1>宿舍管理系統 (v17 實質同步版)</h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -140,7 +140,8 @@
     </div>
 
     <script>
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbwuJDYtXooyFqCf-z3YqaZRTSkLTB7lrJJzP2SMpjsjQxI8WDFIvOQTW_crj-nMfXxbtQ/exec";
+        // ⚠️ 請務必把下方網址換成您在第一步重新部署 GAS 後拿到最新網址 ⚠️
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbw95-wZ_jyk2dMG3zwPkBhVGHbYkLP0GSUM03eDctpQ955sI9u9OxKKMGuz53HUvsJxLQ/exec";
         const ELECTRICITY_RATE = 5; 
 
         let rooms = {}; 
@@ -184,7 +185,6 @@
             document.getElementById('loading-overlay').style.display = status ? 'block' : 'none';
         }
 
-        // 優化點 1：加上時間戳記，打破手機「加到主畫面」的硬快取
         async function loadCloudData() {
             showLoading(true);
             try {
@@ -194,13 +194,14 @@
                 
                 if (cloudRooms && Object.keys(cloudRooms).length > 2) {
                     rooms = cloudRooms;
+                    console.log("成功同步雲端最新數據。");
                 } else {
                     rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
                     initMissingRooms();
                     await saveToCloud();
                 }
             } catch (error) {
-                console.log("快取攔截或雲端無回應，使用本地內建名單資料。");
+                console.log("讀取異常，載入內建初始名單。");
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
             } finally {
                 initMissingRooms();
@@ -209,25 +210,26 @@
             }
         }
 
-        // 優化點 2：改用相容性最高的 URLSearchParams 格式發送，解決部分手機瀏覽器不吃 JSON POST 的隱形失敗
+        // 優化傳輸：重新改回標準的 text/plain 跨域格式，確保能真正獲得 Google 寫入完成的狀態
         async function saveToCloud() {
             showLoading(true);
             try {
-                await fetch(GAS_URL, {
+                const response = await fetch(GAS_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(rooms)
                 });
-                // 由於 no-cors 無法直接取得 response 內容，改以通知形式確認包投遞
-                console.log("同步訊號已發送。");
+                const result = await response.json();
+                if (result && result.status === "success") {
+                    alert("✅ 雲端同步成功！資料已寫入 Google Sheet。");
+                } else {
+                    alert("⚠️ 雲端接收未明，建議檢查試算表 A1 欄位。");
+                }
             } catch (error) {
-                alert("❌ 同步至雲端伺服器失敗，請檢查網路！");
+                // 如果因為 CORS 阻擋導致抓不到 response 狀態，提供警告引導檢查
+                alert("📢 同步指令已發出，請重新整理另一裝置確認。若依然失敗，請確認 GAS 是否有部署為『新版本』！");
             } finally {
-                setTimeout(() => {
-                    showLoading(false);
-                    alert("✅ 雲端同步指令已發送！請在另一台裝置重新整理確認。");
-                }, 600);
+                showLoading(false);
             }
         }
 
@@ -473,7 +475,6 @@
                         initMissingRooms();
                         switchRoom(currentRoom);
                         await saveToCloud(); 
-                        alert("備份資料匯入並成功同步至雲端！");
                     } else { alert("檔案格式不正確！"); }
                 } catch (err) { alert("讀取檔案失敗！"); }
             };
