@@ -100,6 +100,7 @@
     </div>
 
     <script>
+        /*暫時隱藏
         // Firebase Config
         const firebaseConfig = {
           apiKey: "AIzaSyAAu8JMa-woq2jDKjPwFLrMo2WEfmvK1Q0",
@@ -113,6 +114,7 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        */
 
         let rooms = {};
         let currentRoom = "1-1";
@@ -161,7 +163,7 @@
                 '第三排': ['3-1','3-2','3-3','3-4','3-5','3-6','3-7'],
                 '第四排': ['4-1','4-2','4-3','4-4','4-5','4-6','4-7'],
                 '第五排': ['5-1'],
-                '公共區域': ['公共區域A', '公共區域B']
+                '公共空間': ['公共區域A', '公共區域B']
             };
 
             Object.keys(floors).forEach(floorName => {
