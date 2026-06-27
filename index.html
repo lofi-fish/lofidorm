@@ -22,6 +22,7 @@
         .room-item { padding: 12px 15px; margin: 4px 0; background: white; border-radius: 8px; cursor: pointer; border: 1px solid #ddd; font-size: 15px; }
         .room-item:hover, .room-item.active { background: #b0d4b8; }
         .warehouse-tag { background: #ff9800; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-left: 8px; display: inline-block; }
+        .leave-tag { background: #d9534f; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; margin-left: 8px; display: inline-block; }
         
         button { padding: 12px 16px; border: none; border-radius: 6px; background: var(--accent-green); color: white; cursor: pointer; margin: 5px 2px; font-size: 15px; }
         button:hover { background: #0f4c2a; }
@@ -37,10 +38,12 @@
         #meter-section { background: #f4fdf7; padding: 15px; border-radius: 8px; border: 1px solid #b0d4b8; margin-bottom: 20px; }
         #loading-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 99; text-align: center; padding-top: 100px; font-size: 18px; font-weight: bold; color: var(--main-green); }
         
-        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; margin-bottom: 30px; }
         table { width: 100%; border-collapse: collapse; text-align: center; min-width: 500px; }
         th, td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
+
+        .bill-summary-box { background: #fffde6; padding: 15px; border-radius: 8px; border: 1px solid #e6db55; margin-top: 40px; }
 
         @media (max-width: 768px) {
             .menu-toggle { display: block; }
@@ -48,7 +51,6 @@
             .sidebar.open { transform: translateX(0); }
             .sidebar-overlay.open { display: block; }
             .content { padding: 15px; width: 100%; }
-            #meter-section button { width: 46%; padding: 12px 5px; font-size: 14px; display: inline-block; }
         }
     </style>
 </head>
@@ -56,7 +58,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>宿舍管理系統 (v17 實質同步版)</h1>
+        <h1>宿舍管理系統 (v19 財務清冊版)</h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -93,9 +95,7 @@
                 <div style="margin-bottom: 15px;">
                     <label>當期度數：<input type="number" id="meter-reading" placeholder="請輸入電表度數" step="0.1" style="width: auto;"></label>
                 </div>
-                <button onclick="takePhoto()">📱 直接拍照</button>
-                <button onclick="performOCR()">🤖 OCR 辨識</button>
-                <button onclick="saveMeterReading()" style="background-color: #2196F3; width: 95%;">儲存抄表</button>
+                <button onclick="saveMeterReading()" style="background-color: #2196F3; width: 100%; margin: 0;">儲存抄表</button>
             </div>
             
             <h3>歷史抄表紀錄</h3>
@@ -113,6 +113,29 @@
                     <tbody></tbody>
                 </table>
             </div>
+
+            <div class="bill-summary-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: #5c5300;">📊 本月收費清冊 (<span id="summary-month-label">06</span>月)</h3>
+                    <button onclick="exportSummaryCSV()" style="padding: 6px 12px; font-size: 13px; background: #ff9800; margin:0;">📥 導出清冊 CSV</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="summary-table">
+                        <thead>
+                            <tr style="background-color: #f7f4c1;">
+                                <th>房間</th>
+                                <th>姓名</th>
+                                <th>本月用電 (度)</th>
+                                <th>本月電費</th>
+                                <th>管理費</th>
+                                <th style="color: #a11b00; font-weight: bold;">本月應收總額</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -134,35 +157,36 @@
             <h2>申請退宿</h2>
             <label>選擇房間：</label>
             <select id="leave-room"></select>
-            <input type="date" id="leave-date">
+            <label style="margin-top: 10px; display: block;">預定退宿日期：</label>
+            <input type="date" id="leave-date" value="2026-06-27">
             <button onclick="submitApplyLeave()" style="width:100%; margin-top:10px;">送出退宿</button>
         </div>
     </div>
 
     <script>
-        // ⚠️ 請務必把下方網址換成您在第一步重新部署 GAS 後拿到最新網址 ⚠️
+        // 已自動更新為您提供的新部署連結 ⚠️
         const GAS_URL = "https://script.google.com/macros/s/AKfycbw95-wZ_jyk2dMG3zwPkBhVGHbYkLP0GSUM03eDctpQ955sI9u9OxKKMGuz53HUvsJxLQ/exec";
         const ELECTRICITY_RATE = 5; 
 
         let rooms = {}; 
 
         const DEFAULT_ROOMS_DATA = {
-            "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}]},
-            "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}]},
-            "1-3": {name: "劉雨婷", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1886.3}]},
-            "1-4": {name: "李美娟", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 2663.6}]},
-            "1-5": {name: "", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 13.8}]},
-            "1-6": {name: "楊曉嵐", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1308.4}]},
-            "1-7": {name: "蘇建政", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1955.6}]},
-            "2-1": {name: "", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1065.5}]},
-            "2-2": {name: "宿舍備品室", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 385.2}]},
-            "2-6": {name: "蔡玉萍", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 2665}]},
-            "3-1": {name: "劉雨婷", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 530.2}]},
-            "3-7": {name: "楊曉嵐", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 997.4}]},
-            "4-3": {name: "王岑瑄", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-31", value: 3308.6}]},
-            "4-4": {name: "王岑瑄", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-31", value: 903.1}]},
-            "4-5": {name: "李泓楷", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1177.1}]},
-            "5-1": {name: "謝俊逸", isWarehouse: false, managementFee: 2400, readings: [{date: "2026-05-04", value: 4043.4}]}
+            "1-1": {name: "簡鴻存", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 3732.2}], leaveDate: ""},
+            "1-2": {name: "簡鴻存", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1480}], leaveDate: ""},
+            "1-3": {name: "劉雨婷", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 1886.3}], leaveDate: ""},
+            "1-4": {name: "李美娟", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 2663.6}], leaveDate: ""},
+            "1-5": {name: "", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 13.8}], leaveDate: ""},
+            "1-6": {name: "楊曉嵐", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1308.4}], leaveDate: ""},
+            "1-7": {name: "蘇建政", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1955.6}], leaveDate: ""},
+            "2-1": {name: "", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1065.5}], leaveDate: ""},
+            "2-2": {name: "宿舍備品室", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 385.2}], leaveDate: ""},
+            "2-6": {name: "蔡玉萍", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 2665}], leaveDate: ""},
+            "3-1": {name: "劉雨婷", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-04", value: 530.2}], leaveDate: ""},
+            "3-7": {name: "楊曉嵐", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 997.4}], leaveDate: ""},
+            "4-3": {name: "王岑瑄", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-31", value: 3308.6}], leaveDate: ""},
+            "4-4": {name: "王岑瑄", isWarehouse: true, managementFee: 500, readings: [{date: "2026-05-31", value: 903.1}], leaveDate: ""},
+            "4-5": {name: "李泓楷", isWarehouse: false, managementFee: 1600, readings: [{date: "2026-05-04", value: 1177.1}], leaveDate: ""},
+            "5-1": {name: "謝俊逸", isWarehouse: false, managementFee: 2400, readings: [{date: "2026-05-04", value: 4043.4}], leaveDate: ""}
         };
 
         const ALL_FLOORS = {
@@ -185,6 +209,18 @@
             document.getElementById('loading-overlay').style.display = status ? 'block' : 'none';
         }
 
+        function checkAndProcessAutoLeave() {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            Object.keys(rooms).forEach(roomId => {
+                if (rooms[roomId].leaveDate && rooms[roomId].leaveDate <= todayStr) {
+                    rooms[roomId].name = '';
+                    rooms[roomId].isWarehouse = false;
+                    rooms[roomId].managementFee = 1600;
+                    rooms[roomId].leaveDate = ''; 
+                }
+            });
+        }
+
         async function loadCloudData() {
             showLoading(true);
             try {
@@ -194,23 +230,22 @@
                 
                 if (cloudRooms && Object.keys(cloudRooms).length > 2) {
                     rooms = cloudRooms;
-                    console.log("成功同步雲端最新數據。");
                 } else {
                     rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
                     initMissingRooms();
                     await saveToCloud();
                 }
             } catch (error) {
-                console.log("讀取異常，載入內建初始名單。");
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
             } finally {
                 initMissingRooms();
+                checkAndProcessAutoLeave(); 
                 switchRoom(currentRoom);
+                renderSummaryTable(); // 每次刷新都重繪清冊
                 showLoading(false);
             }
         }
 
-        // 優化傳輸：重新改回標準的 text/plain 跨域格式，確保能真正獲得 Google 寫入完成的狀態
         async function saveToCloud() {
             showLoading(true);
             try {
@@ -223,12 +258,12 @@
                 if (result && result.status === "success") {
                     alert("✅ 雲端同步成功！資料已寫入 Google Sheet。");
                 } else {
-                    alert("⚠️ 雲端接收未明，建議檢查試算表 A1 欄位。");
+                    alert("⚠️ 雲端接收未明，建議檢查試算表。");
                 }
             } catch (error) {
-                // 如果因為 CORS 阻擋導致抓不到 response 狀態，提供警告引導檢查
-                alert("📢 同步指令已發出，請重新整理另一裝置確認。若依然失敗，請確認 GAS 是否有部署為『新版本』！");
+                alert("📢 同步指令已發出，請重新整理另一裝置確認。");
             } finally {
+                renderSummaryTable(); // 每次儲存完自動刷新清冊
                 showLoading(false);
             }
         }
@@ -238,7 +273,7 @@
                 roomList.forEach(roomId => {
                     if (!rooms[roomId]) {
                         const isPublic = roomId.includes("公共區域");
-                        rooms[roomId] = { name: "", isWarehouse: false, managementFee: isPublic ? 0 : 1600, readings: [] };
+                        rooms[roomId] = { name: "", isWarehouse: false, managementFee: isPublic ? 0 : 1600, readings: [], leaveDate: "" };
                     }
                 });
             });
@@ -265,7 +300,11 @@
                         displayName = `${roomId} ${room.name || '(空房)'}`;
                     }
                     
-                    item.innerHTML = `${displayName}${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
+                    let tags = '';
+                    if (room.isWarehouse) tags += '<span class="warehouse-tag">倉庫</span>';
+                    if (room.leaveDate) tags += `<span class="leave-tag" style="background-color: #666;">⏳ 預約退宿</span>`;
+                    
+                    item.innerHTML = `${displayName}${tags}`;
                     item.onclick = () => {
                         switchRoom(roomId);
                         if(window.innerWidth <= 768) {
@@ -291,9 +330,12 @@
             
             let htmlContent = `<h2>${roomId}</h2>`;
             if (!roomId.includes("公共區域")) {
-                htmlContent = `<h2>${roomId} ${room.name || '(空房)'}</h2>
-                               ${room.isWarehouse ? '<span class="warehouse-tag">倉庫</span>' : ''}`;
+                htmlContent = `<h2>${roomId} ${room.name || '(空房)'}</h2>`;
             }
+            
+            if (room.isWarehouse) htmlContent += '<span class="warehouse-tag">倉庫</span> ';
+            if (room.leaveDate) htmlContent += `<span class="leave-tag">⚠️ 預定於 ${room.leaveDate} 退宿</span>`;
+            
             htmlContent += `<p>管理費: ${room.managementFee} 元</p>`;
             
             document.getElementById('current-room-info').innerHTML = htmlContent;
@@ -345,6 +387,125 @@
             });
         }
 
+        // 核心財務功能：計算並渲染本月財務清冊
+        function calculateMonthlyBilling() {
+            const currentYearMonth = "2026-06"; // 鎖定目前操作月份字串 YYYY-MM
+            document.getElementById('summary-month-label').textContent = "06";
+
+            let summaryData = [];
+            let totalElectricityCost = 0;
+            let totalMgmtFee = 0;
+            let totalGrandAmount = 0;
+
+            // 依據定義的順序排序所有房間並進行計算
+            const orderOfRooms = [];
+            Object.values(ALL_FLOORS).forEach(arr => orderOfRooms.push(...arr));
+
+            orderOfRooms.forEach(roomId => {
+                const room = rooms[roomId];
+                if (!room) return;
+
+                let consumed = 0;
+                let elecCost = 0;
+
+                // 排序抄表紀錄
+                let sortedReadings = [...(room.readings || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                // 找出在本月 (2026-06) 內的抄表紀錄
+                let targetIdx = sortedReadings.findIndex(r => r.date.startsWith(currentYearMonth));
+                
+                if (targetIdx !== -1) {
+                    // 如果找到了本月的抄表，用它減去前一筆，算出本月用電
+                    let currentReading = sortedReadings[targetIdx];
+                    if (targetIdx > 0) {
+                        let prevReading = sortedReadings[targetIdx - 1];
+                        let diff = currentReading.value - prevReading.value;
+                        if (diff > 0) {
+                            consumed = diff;
+                            elecCost = Math.round(diff * ELECTRICITY_RATE);
+                        }
+                    }
+                }
+
+                // 公共區域或是空房無人入住，沒有管理費 (但可能會有預約退宿留下的歷史管理費)
+                let mgmtFee = room.name ? (room.managementFee || 0) : 0;
+                let totalAmount = elecCost + mgmtFee;
+
+                totalElectricityCost += elecCost;
+                totalMgmtFee += mgmtFee;
+                totalGrandAmount += totalAmount;
+
+                summaryData.push({
+                    id: roomId,
+                    name: room.name || (roomId.includes("公共區域") ? "公共區域" : "（空房）"),
+                    consumed: consumed > 0 ? consumed.toFixed(1) : "-",
+                    elecCost: elecCost,
+                    mgmtFee: mgmtFee,
+                    total: totalAmount
+                });
+            });
+
+            return { summaryData, totalElectricityCost, totalMgmtFee, totalGrandAmount };
+        }
+
+        function renderSummaryTable() {
+            const tbody = document.querySelector('#summary-table tbody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            const { summaryData, totalElectricityCost, totalMgmtFee, totalGrandAmount } = calculateMonthlyBilling();
+
+            summaryData.forEach(row => {
+                const tr = document.createElement('tr');
+                // 如果是總額大於0的行或是有住戶的行給予標準樣式
+                tr.innerHTML = `
+                    <td><b>${row.id}</b></td>
+                    <td>${row.name}</td>
+                    <td>${row.consumed}</td>
+                    <td>${row.elecCost > 0 ? row.elecCost + ' 元' : '-'}</td>
+                    <td>${row.mgmtFee > 0 ? row.mgmtFee + ' 元' : '-'}</td>
+                    <td style="font-weight: bold; color: ${row.total > 0 ? '#a11b00' : 'gray'};">${row.total > 0 ? row.total + ' 元' : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 結尾統計總計列
+            const totalTr = document.createElement('tr');
+            totalTr.style.backgroundColor = '#fff9bd';
+            totalTr.style.fontWeight = 'bold';
+            totalTr.innerHTML = `
+                <td colspan="2">全棟營收總計</td>
+                <td>-</td>
+                <td style="color:#1e7a45;">${totalElectricityCost} 元</td>
+                <td style="color:#1e7a45;">${totalMgmtFee} 元</td>
+                <td style="color:#a11b00; font-size:16px;">${totalGrandAmount} 元</td>
+            `;
+            tbody.appendChild(totalTr);
+        }
+
+        function exportSummaryCSV() {
+            const { summaryData, totalElectricityCost, totalMgmtFee, totalGrandAmount } = calculateMonthlyBilling();
+            
+            let csvContent = "\uFEFF"; // 預防 Excel 開啟亂碼的 BOM 頭
+            csvContent += "房間,姓名,本月用電 (度),本月電費,管理費,本月應收總額\n";
+            
+            summaryData.forEach(row => {
+                csvContent += `${row.id},${row.name},${row.consumed},${row.elecCost},${row.mgmtFee},${row.total}\n`;
+            });
+            
+            csvContent += `全棟營收總計,,-,${totalElectricityCost},${totalMgmtFee},${totalGrandAmount}\n`;
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `宿舍_2026_06月收費清冊.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         function showApplyStayModal() {
             const select = document.getElementById('apply-room');
             select.innerHTML = '';
@@ -370,6 +531,7 @@
                     select.appendChild(option);
                 }
             });
+            document.getElementById('leave-date').value = new Date().toISOString().slice(0, 10);
             document.getElementById('apply-leave-modal').style.display = 'block';
         }
 
@@ -385,6 +547,7 @@
                 rooms[roomId].name = name;
                 rooms[roomId].isWarehouse = isWarehouse;
                 rooms[roomId].managementFee = isWarehouse ? 500 : 1600;
+                rooms[roomId].leaveDate = ''; 
                 closeModal('apply-stay-modal');
                 switchRoom(roomId);
                 await saveToCloud();
@@ -398,21 +561,33 @@
 
         async function submitApplyLeave() {
             const roomId = document.getElementById('leave-room').value;
-            if (roomId) {
+            const leaveDateInput = document.getElementById('leave-date').value;
+            
+            if (!roomId || !leaveDateInput) {
+                alert('請確認房間與退宿日期！');
+                return;
+            }
+
+            const todayStr = new Date().toISOString().slice(0, 10);
+
+            if (leaveDateInput <= todayStr) {
                 rooms[roomId].name = '';
                 rooms[roomId].isWarehouse = false;
                 rooms[roomId].managementFee = 1600;
-                closeModal('apply-leave-modal');
-                switchRoom(roomId);
-                await saveToCloud();
-                if(window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
-                    toggleMenu();
-                }
+                rooms[roomId].leaveDate = '';
+                alert(`房間 ${roomId} 已立刻辦理退宿。`);
+            } else {
+                rooms[roomId].leaveDate = leaveDateInput;
+                alert(`已成功預約：房間 ${roomId} 將於 ${leaveDateInput} 自動執行退宿。`);
+            }
+
+            closeModal('apply-leave-modal');
+            switchRoom(roomId);
+            await saveToCloud();
+            if(window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
+                toggleMenu();
             }
         }
-
-        function takePhoto() { alert("模擬拍照功能..."); }
-        function performOCR() { alert("模擬 OCR 辨識..."); }
 
         async function saveMeterReading() {
             const date = document.getElementById('meter-date').value;
@@ -473,6 +648,7 @@
                     if (typeof importedRooms === 'object' && importedRooms !== null) {
                         rooms = importedRooms;
                         initMissingRooms();
+                        checkAndProcessAutoLeave();
                         switchRoom(currentRoom);
                         await saveToCloud(); 
                     } else { alert("檔案格式不正確！"); }
