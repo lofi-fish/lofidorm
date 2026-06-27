@@ -38,7 +38,7 @@
     <div class="container">
         <header>
             <h1>宿舍管理系統</h1>
-            <p>Firebase 雲端同步版 2026.06.27 V4</p>
+            <p>Firebase 雲端同步版 2026.06.27 V5</p>
         </header>
         <div class="main-content">
             <!-- Sidebar -->
@@ -100,23 +100,19 @@
     </div>
 
     <script>
-        // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// Firebase Config (已完整修正)
+        const firebaseConfig = {
+          apiKey: "AIzaSyAAu8JMa-woq2jDKjPwFLrMo2WEfmvK1Q0",
+          authDomain: "lofi-dorm.firebaseapp.com",
+          projectId: "lofi-dorm",
+          storageBucket: "lofi-dorm.firebasestorage.app",
+          messagingSenderId: "850352509179",
+          appId: "1:850352509179:web:36bec28d3f2f661fd1605e",
+          databaseURL: "https://lofi-dorm-default-rtdb.firebaseio.com/"
+        };
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAAu8JMa-woq2jDKjPwFLrMo2WEfmvK1Q0",
-  authDomain: "lofi-dorm.firebaseapp.com",
-  projectId: "lofi-dorm",
-  storageBucket: "lofi-dorm.firebasestorage.app",
-  messagingSenderId: "850352509179",
-  appId: "1:850352509179:web:36bec28d3f2f661fd1605e"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
         let rooms = {};
         let currentRoom = "1-1";
