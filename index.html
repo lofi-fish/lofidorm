@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v32.1) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
+        <h1>🏠 宿舍管理系統 (v33) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -652,7 +652,7 @@
             showDefaultHome();
         }
 
-        // 核心修復：全面優化動態判讀退宿與跨月抄費邏輯
+        // 核心解綁優化版：徹底解決 1-3, 3-1, 4-5 電表空缺導致整個人被跳過的問題
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "" };
@@ -660,17 +660,18 @@
             if(!room) return res;
             if(roomId.includes("公共")) { res.nameDisplay = "公共分攤"; return res; }
 
-            // 1. 先確認該房間是否有該月「退宿追溯」特徵
+            // 1. 動態判定該房在當前查詢月份的「身分大名」
             let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
             let activeName = room.name;
             let isWh = room.isWarehouse;
 
+            // 處理像 1-3, 3-1, 4-5 這種在 6 月退宿，但目前系統時間已到 7 月而變成空房的情境
             if (!activeName && isLeavedInThisMonth) {
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退宿房客";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : isWh;
             }
 
-            // 2. 電表抄度抓取邏輯強化
+            // 2. 電表抄度計算
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -682,8 +683,7 @@
                     if(currList.length > 0) {
                         res.curr = currList[currList.length - 1].value;
                     } else if (isLeavedInThisMonth && sorted.length > 0) {
-                        // 容錯：若6月退宿且未抄新度數，止數自動對齊該房歷史最新度數
-                        res.curr = sorted[sorted.length - 1].value;
+                        res.curr = sorted[sorted.length - 1].value; 
                     }
                 } else if (monthStr === "2026-07") {
                     let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
@@ -707,6 +707,7 @@
 
             if(room.isSpecialLock) { res.nameDisplay = room.name || "備品室"; return res; }
 
+            // 臨時入住判斷
             if(room.isTemp) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
@@ -715,18 +716,31 @@
                 if(!hasTempInThisMonth && !isLeavedInThisMonth) { activeName = ""; }
             }
 
-            if(room.leaveDate) {
+            // 修正：只有當退宿月份「等於」目前查詢的月份時，才在備註欄顯示退宿說明
+            if(room.leaveDate && room.leaveDate.startsWith(monthStr)) {
                 res.note += `[退宿日: ${room.leaveDate}] `;
             }
 
-            // 3. 確保無論如何都能結算到應收總計金額
+            // 未來預約判斷：若該房間是未來預約（例如 7/12 入住），只有當查詢 7 月時才顯示；查詢 6 月時強制當成空房且不顯示預約備註
+            if(room.name && room.checkInDate && room.checkInDate > `${monthStr}-31`) {
+                if(!isLeavedInThisMonth) {
+                    activeName = ""; 
+                }
+            }
+
+            // 3. 費用最終組裝（與電表有無紀錄完全解綁）
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
                 
                 if(room.isWarden || room.isSecurityOnly) res.mgmtFee = 0;
                 if(room.isTemp) res.mgmtFee = 0;
-                if(room.isBookingFuture && !room.leaveDate && !room.isTemp) { res.nameDisplay = "(空房)"; res.mgmtFee = 0; }
+                
+                // 如果是純粹的未來預約月，再次校正回空房
+                if(room.name && room.checkInDate && room.checkInDate > `${monthStr}-31` && !isLeavedInThisMonth) {
+                    res.nameDisplay = "空房";
+                    res.mgmtFee = 0;
+                }
 
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
