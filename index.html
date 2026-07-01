@@ -47,11 +47,9 @@
         #meter-section { background: #f4fdf7; padding: 15px; border-radius: 8px; border: 1px solid #b0d4b8; margin-bottom: 20px; }
         #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 1005; text-align: center; padding-top: 200px; font-size: 18px; font-weight: bold; color: var(--main-green); }
         
-        /* 凍結標題列相關 CSS */
         .table-responsive { width: 100%; max-height: 75vh; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; margin-bottom: 30px; border: 1px solid #ddd; border-radius: 4px; }
         table { width: 100%; border-collapse: collapse; text-align: center; min-width: 650px; }
         
-        /* 將 thead th 設為 sticky 固定於頂部 */
         thead th { position: sticky; top: 0; background-color: var(--main-green); color: white; z-index: 10; padding: 12px 6px; font-size: 14px; border: 1px solid #ddd; }
         td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
         
@@ -132,7 +130,6 @@
         </div>
     </div>
 
-    <!-- 各種 Modal 視窗保持一致 -->
     <div id="apply-stay-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
@@ -475,7 +472,6 @@
                         displayName = `${roomId} ${nameStr}`;
                         if(room.isBookingFuture) displayName = `${roomId}`;
                     } else if (!room.name && room.leaveDate && room.leaveDate.startsWith(selectedReportMonth)) {
-                        // 針對在指定選取月份內已退宿的人，列表做呈現關聯
                         let nameStr = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退客房";
                         displayName = `${roomId} ${nameStr}`;
                     } else {
@@ -656,6 +652,7 @@
             showDefaultHome();
         }
 
+        // 核心修復：全面優化動態判讀退宿與跨月抄費邏輯
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "" };
@@ -663,6 +660,17 @@
             if(!room) return res;
             if(roomId.includes("公共")) { res.nameDisplay = "公共分攤"; return res; }
 
+            // 1. 先確認該房間是否有該月「退宿追溯」特徵
+            let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
+            let activeName = room.name;
+            let isWh = room.isWarehouse;
+
+            if (!activeName && isLeavedInThisMonth) {
+                activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退宿房客";
+                isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : isWh;
+            }
+
+            // 2. 電表抄度抓取邏輯強化
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -671,7 +679,12 @@
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
 
                     let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
-                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+                    if(currList.length > 0) {
+                        res.curr = currList[currList.length - 1].value;
+                    } else if (isLeavedInThisMonth && sorted.length > 0) {
+                        // 容錯：若6月退宿且未抄新度數，止數自動對齊該房歷史最新度數
+                        res.curr = sorted[sorted.length - 1].value;
+                    }
                 } else if (monthStr === "2026-07") {
                     let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
@@ -694,27 +707,19 @@
 
             if(room.isSpecialLock) { res.nameDisplay = room.name || "備品室"; return res; }
 
-            let activeName = room.name;
-            let isWh = room.isWarehouse;
-
-            // 核心修正：即便現有 name 已清空，但若符合該月退宿紀錄，強制拉回原留存大名進行結算
-            if(!activeName && room.leaveDate && room.leaveDate.startsWith(monthStr)) {
-                activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退宿人員";
-                isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : isWh;
-            }
-
             if(room.isTemp) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
                     hasTempInThisMonth = room.tempList.some(t => t.startDate && t.startDate.startsWith(monthStr));
                 }
-                if(!hasTempInThisMonth) { activeName = ""; }
+                if(!hasTempInThisMonth && !isLeavedInThisMonth) { activeName = ""; }
             }
 
             if(room.leaveDate) {
                 res.note += `[退宿日: ${room.leaveDate}] `;
             }
 
+            // 3. 確保無論如何都能結算到應收總計金額
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
@@ -749,7 +754,6 @@
 
             let isPublicArea = roomId.includes("公共區域");
 
-            // 特殊需求註記文字處理
             let specialNoteText = "常規一般住宿";
             if(room.isSpecialLock) specialNoteText = "倉庫 / 備品管制室";
             else if(room.isDriverOnly) specialNoteText = "團客司領房 (不計常規月費)";
@@ -1055,7 +1059,7 @@
             
             let html = table.outerHTML;
             let excelFile = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'>";
-            excelFile += "<head><meta charset='utf-8'><!--[if gte mso 9]><xml><x:Workbook><x:Worksheets><x:Worksheet><x:Name>DormReport</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:Worksheet></x:Worksheets></x:Workbook></xml><![endif]--></head><body>";
+            excelFile += "<head><meta charset='utf-8'></head><body>";
             excelFile += html;
             excelFile += "</body></html>";
 
