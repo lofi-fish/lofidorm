@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v29 完整財務優化版) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
+        <h1>🏠 宿舍管理系統 (v30) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -316,7 +316,6 @@
                     }
                 } 
                 
-                // 7/1 號時，若現況已有設定 6/30 退宿，清除其長期房客現況，但保留其歷史 leaveDate 與最後姓名紀錄供清冊回溯
                 if (room.leaveDate && room.leaveDate < TODAY_STR && !room.isTemp) {
                     if (room.name) {
                         room.lastArchivedName = room.name; 
@@ -647,7 +646,6 @@
             showDefaultHome();
         }
 
-        // 核心計算修正：完美串聯跨月抄表與歷史退宿邏輯
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "" };
@@ -655,30 +653,23 @@
             if(!room) return res;
             if(roomId.includes("公共")) { res.nameDisplay = "公共分攤"; return res; }
 
-            // 1. 【電表歷史串聯邏輯】
             if(room.readings && room.readings.length > 0) {
-                // 由遠至近排序，便於指針式比對
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
                 if (monthStr === "2026-06") {
-                    // 6月份帳單：上月結數為5/4（小於6/1的最接近紀錄）
                     let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
 
-                    // 6月份帳單：本月止數允許切到 7/1~7/5 的抄表紀錄
                     let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
                     if(currList.length > 0) res.curr = currList[currList.length - 1].value;
 
                 } else if (monthStr === "2026-07") {
-                    // 7月份帳單：上月結數等於6月的本月止數（即 7/1 ~ 7/5 期間的最早那筆抄表）
                     let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
 
-                    // 7月份帳單：本月止數為 7 月當月紀錄
                     let currList = sorted.filter(r => r.date.startsWith("2026-07") && new Date(r.date) > new Date("2026-07-05T23:59:59"));
                     if(currList.length > 0) res.curr = currList[currList.length - 1].value;
                 } else {
-                    // 通用常規月份
                     let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
 
@@ -686,7 +677,6 @@
                     if(currList.length > 0) res.curr = currList[currList.length - 1].value;
                 }
 
-                // 計算用電度數與金額
                 if(res.prev !== "—" && res.curr !== "—") {
                     res.degree = Math.max(0, Math.round((res.curr - res.prev) * 10) / 10);
                     res.elecFee = Math.round(res.degree * ELECTRICITY_RATE);
@@ -695,11 +685,9 @@
 
             if(room.isSpecialLock) { res.nameDisplay = room.name || "備品室"; return res; }
 
-            // 2. 【退宿歷史追溯邏輯（如 3-1 劉雨婷 狀況）】
             let activeName = room.name;
             let isWh = room.isWarehouse;
 
-            // 判定是否為該月份的歷史退宿房客
             if(!activeName && room.leaveDate && room.leaveDate.startsWith(monthStr)) {
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.name || "已退宿者";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : true;
@@ -709,7 +697,6 @@
                 res.note += `[退宿日: ${room.leaveDate}] `;
             }
 
-            // 3. 【管理費金額計價】
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
@@ -738,7 +725,6 @@
             let isLocked = isCurrentMonthLocked();
             let disabledStr = isLocked ? "disabled" : "";
 
-            // 強制由近至遠（最新日期在最上面）排序
             if(room.readings) {
                 room.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
             }
@@ -793,7 +779,6 @@
             if(!rooms[roomId].readings) rooms[roomId].readings = [];
             rooms[roomId].readings.push({ date: dateInput.value, value: parseFloat(valInput.value) });
             
-            // 寫入後立即進行由近至遠排序
             rooms[roomId].readings.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             alert(`✅ 電表紀錄已儲存！`);
@@ -852,14 +837,14 @@
             Object.keys(ALL_FLOORS).forEach(floor => {
                 ALL_FLOORS[floor].forEach(r => {
                     if(!r.includes("公共")) {
-                        optionsHtml += `<option value="${r}">${r} (${rooms[r]?.name ? rooms[r].name : '空房'})</option>';
+                        optionsHtml += `<option value="${r}">${r} (${rooms[r]?.name ? rooms[r].name : '空房'})</option>`;
                     }
                 });
             });
 
             selects.forEach(id => {
                 const el = document.getElementById(id);
-                if(el && el.innerHTML === "") el.innerHTML = optionsHtml;
+                if(el) el.innerHTML = optionsHtml;
             });
         }
 
