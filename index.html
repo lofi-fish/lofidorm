@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v27 歷史清冊回溯版) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">更新時間：2026-07-01</span></h1>
+        <h1>🏠 宿舍管理系統 (v29 完整財務優化版) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -127,7 +127,6 @@
         </div>
     </div>
 
-    <!-- 各個彈出視窗（Modal）區塊 -->
     <div id="apply-stay-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
@@ -236,7 +235,7 @@
 
     <div id="apply-leave-modal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
+            <span class="close" onclick="closeModal('apply-leave-modal')">×</span>
             <h2>申請退宿清除</h2>
             <label>選擇房間：</label>
             <select id="leave-room"></select>
@@ -266,7 +265,7 @@
             "2-1": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 1065.5}], leaveDate: ""},
             "2-2": {name: "宿舍備品室", isWarehouse: false, readings: [{date: "2026-05-04", value: 385.2}], leaveDate: "", isSpecialLock: true},
             "2-6": {name: "蔡玉萍", isWarehouse: false, readings: [{date: "2026-05-04", value: 2665}], leaveDate: "", checkInDate: "2026-05-01"},
-            "3-1": {name: "劉雨婷", isWarehouse: true, readings: [{date: "2026-05-04", value: 530.2}], leaveDate: "", checkInDate: "2026-05-01"},
+            "3-1": {name: "劉雨婷", isWarehouse: true, readings: [{date: "2026-05-04", value: 530.2}], leaveDate: "2026-06-30", checkInDate: "2026-05-01"},
             "3-7": {name: "楊曉嵐", isWarehouse: false, readings: [{date: "2026-05-04", value: 997.4}], leaveDate: "", checkInDate: "2026-05-01"},
             "4-1": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 0}], leaveDate: "", isDriverOnly: true},
             "4-2": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 0}], leaveDate: "", isDriverOnly: true},
@@ -317,38 +316,13 @@
                     }
                 } 
                 
-                // 退宿排程清除：如果到了 7/1 發現退宿日已到
-                if (room.leaveDate && room.leaveDate <= TODAY_STR && !room.isTemp) {
-                    // 1. 修正：在清空前，先將 6 月的退宿人狀態存入歷史暫留欄位，以便 6 月財務報表追溯
-                    if(room.name && room.leaveDate.startsWith("2026-06")) {
-                        if(!room.historyLeaveLogs) room.historyLeaveLogs = {};
-                        room.historyLeaveLogs["2026-06"] = {
-                            name: room.name,
-                            isWarehouse: room.isWarehouse,
-                            isWarden: room.isWarden,
-                            isSecurityOnly: room.isSecurityOnly,
-                            hasRoommate: room.hasRoommate,
-                            roommateName: room.roommateName,
-                            checkInDate: room.checkInDate,
-                            leaveDate: room.leaveDate
-                        };
+                // 7/1 號時，若現況已有設定 6/30 退宿，清除其長期房客現況，但保留其歷史 leaveDate 與最後姓名紀錄供清冊回溯
+                if (room.leaveDate && room.leaveDate < TODAY_STR && !room.isTemp) {
+                    if (room.name) {
+                        room.lastArchivedName = room.name; 
+                        room.lastArchivedIsWarehouse = room.isWarehouse;
+                        room.name = ''; 
                     }
-
-                    // 2. 清空現況狀態
-                    room.name = ''; 
-                    room.isWarehouse = false; 
-                    room.leaveDate = ''; 
-                    room.isTemp = false; 
-                    room.tempInfo = null; 
-                    room.checkInDate = ''; 
-                    room.isBookingFuture = false;
-                    room.isSecurityOnly = false; 
-                    room.hasRoommate = false; 
-                    room.roommateName = ''; 
-                    room.isLeaveRetention = false; 
-                    room.leaveRetentionReason = ''; 
-                    room.isWarden = false;
-                    if(roomId === "1-7") room.isSecurityOnly = true; 
                 }
                 
                 if (room.isBookingFuture && room.checkInDate && room.checkInDate <= TODAY_STR) {
@@ -552,12 +526,12 @@
             const isLocked = configParams.lockedMonths[selectedReportMonth] === true;
             
             if(isLocked) {
-                if(confirm(`🔓 確定要「解除」 ${selectedReportMonth} 月的結案鎖定嗎？解鎖後資料將恢復可修改狀態。`)) {
+                if(confirm(`🔓 確定要「解除」 ${selectedReportMonth} 月的結案鎖定嗎？`)) {
                     configParams.lockedMonths[selectedReportMonth] = false;
                     await saveToCloud();
                 }
             } else {
-                if(confirm(`🔒 確定要將 ${selectedReportMonth} 月進行「會計結案鎖定」嗎？結案後該月費用、抄表紀錄、收費完成狀態將被強制固定，無法再修改。`)) {
+                if(confirm(`🔒 確定要將 ${selectedReportMonth} 月進行「會計結案鎖定」嗎？`)) {
                     configParams.lockedMonths[selectedReportMonth] = true;
                     await saveToCloud();
                 }
@@ -573,9 +547,8 @@
 
             const isLocked = isCurrentMonthLocked();
             const lockBtnText = isLocked ? "🔓 解除此月結案" : "🔒 執行此月會計結案";
-            const lockBadge = isLocked ? `<span style="background:#c62828; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">🔒 已結案鎖定 (唯讀)</span>` : `<span style="background:#4caf50; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">開放中</span>`;
+            const lockBadge = isLocked ? `<span style="background:#c62828; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">🔒 已結案鎖定</span>` : `<span style="background:#4caf50; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">開放中</span>`;
 
-            // 2. 修正：財務清冊移除『類型標籤』欄位
             let html = `
                 <div class="bill-summary-box" style="margin-top:0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap:10px;">
@@ -588,7 +561,7 @@
                         </div>
                         <button onclick="toggleLockMonth()" style="background:${isLocked?'#666':'#d9534f'}; margin:0; padding:8px 12px; font-size:13px;">${lockBtnText}</button>
                     </div>
-                    <p style="margin:5px 0; font-size:13px; color:#555;">💡 說明：管理費與電費依各房當月實際狀態自動計價。已鎖定之月份無法變更計費或狀態。</p>
+                    <p style="margin:5px 0; font-size:13px; color:#555;">💡 規則：7/1~7/5 的抄表將默認歸為 6 月的「本月止數」；而 7/1~7/5 的止數在切換至 7 月帳單時，將自動成為 7 月的「上月結數」。</p>
                 </div>
                 
                 <div class="table-responsive">
@@ -636,7 +609,7 @@
                             <td>$${calc.elecFee}</td>
                             <td>$${calc.mgmtFee}</td>
                             <td style="color:#b22222; font-weight:bold;">$${calc.total}</td>
-                            <td style="text-align:left; font-size:12px; max-width:180px;">${calc.note}</td>
+                            <td style="text-align:left; font-size:12px; max-width:180px; color:#c62828;">${calc.note}</td>
                         </tr>
                     `;
                 });
@@ -674,93 +647,76 @@
             showDefaultHome();
         }
 
-        // 1 & 3. 修正：動態追溯退宿者歷史，並正確抓配對 5/4 抄表為「上月結數」
+        // 核心計算修正：完美串聯跨月抄表與歷史退宿邏輯
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "" };
             
             if(!room) return res;
-            if(roomId.includes("公共區域") || roomId.includes("公共開放區域")) {
-                res.nameDisplay = "公共分攤"; return res;
-            }
+            if(roomId.includes("公共")) { res.nameDisplay = "公共分攤"; return res; }
 
-            // --- ⚡ 電表度數追溯與配對邏輯 ⚡ ---
+            // 1. 【電表歷史串聯邏輯】
             if(room.readings && room.readings.length > 0) {
-                let sorted = [...room.readings].sort((a,b) => new Date(a.date) - new Date(b.date));
+                // 由遠至近排序，便於指針式比對
+                let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
-                // 找出落在指定財務月份 (例如 2026-06) 的抄表紀錄
-                let thisMonthReadings = sorted.filter(r => r.date.startsWith(monthStr));
-                
-                if(thisMonthReadings.length > 0) {
-                    let currObj = thisMonthReadings[thisMonthReadings.length - 1];
-                    res.curr = currObj.value; // 本月止數
-                    
-                    // 3. 修正：往前找小於本月區間的最鄰近一筆（包含 5/4 紀錄）作為「上月結數」
-                    let prevReadings = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
-                    if(prevReadings.length > 0) {
-                        res.prev = prevReadings[prevReadings.length - 1].value;
-                        res.degree = Math.max(0, Math.round((res.curr - res.prev) * 10) / 10);
-                        res.elecFee = Math.round(res.degree * ELECTRICITY_RATE);
-                    }
+                if (monthStr === "2026-06") {
+                    // 6月份帳單：上月結數為5/4（小於6/1的最接近紀錄）
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    // 6月份帳單：本月止數允許切到 7/1~7/5 的抄表紀錄
+                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+
+                } else if (monthStr === "2026-07") {
+                    // 7月份帳單：上月結數等於6月的本月止數（即 7/1 ~ 7/5 期間的最早那筆抄表）
+                    let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    // 7月份帳單：本月止數為 7 月當月紀錄
+                    let currList = sorted.filter(r => r.date.startsWith("2026-07") && new Date(r.date) > new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
                 } else {
-                    // 如果 6 月沒抄表，但有歷史資料，只做純止數列出
-                    let prevReadings = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
-                    if(prevReadings.length > 0) {
-                        res.prev = prevReadings[prevReadings.length - 1].value;
-                    }
+                    // 通用常規月份
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+                }
+
+                // 計算用電度數與金額
+                if(res.prev !== "—" && res.curr !== "—") {
+                    res.degree = Math.max(0, Math.round((res.curr - res.prev) * 10) / 10);
+                    res.elecFee = Math.round(res.degree * ELECTRICITY_RATE);
                 }
             }
 
             if(room.isSpecialLock) { res.nameDisplay = room.name || "備品室"; return res; }
 
-            // --- 🏠 人員狀態歷史回溯邏輯 🏠 ---
+            // 2. 【退宿歷史追溯邏輯（如 3-1 劉雨婷 狀況）】
             let activeName = room.name;
             let isWh = room.isWarehouse;
-            let isWar = room.isWarden;
-            let isSec = room.isSecurityOnly;
-            let isRet = room.isLeaveRetention;
-            let hasRm = room.hasRoommate;
-            let rmName = room.roommateName;
-            let retReason = room.leaveRetentionReason;
 
-            // 1. 修正：若現況是空房、或是7月才搬進來，但點選檢視 6 月帳單，自動去歷史備份區間尋找 6 月退宿者資料
-            if(!activeName && monthStr === "2026-06" && room.historyLeaveLogs && room.historyLeaveLogs["2026-06"]) {
-                const hist = room.historyLeaveLogs["2026-06"];
-                activeName = hist.name;
-                isWh = hist.isWarehouse;
-                isWar = hist.isWarden;
-                isSec = hist.isSecurityOnly;
-                hasRm = hist.hasRoommate;
-                rmName = hist.roommateName;
-                res.note += "⚠️ 6月已退宿人員 ";
+            // 判定是否為該月份的歷史退宿房客
+            if(!activeName && room.leaveDate && room.leaveDate.startsWith(monthStr)) {
+                activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.name || "已退宿者";
+                isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : true;
             }
 
-            // 如果原本 DEFAULT 裡面有寫入 checkInDate 是 5 月的
-            if(!activeName && room.readings && room.readings.some(r => r.date.startsWith("2026-06"))) {
-                // 如果系統有 6 月抄表紀錄，但現況沒名子，可以從預設初始名單中比對配對
-                const backupData = DEFAULT_ROOMS_DATA[roomId];
-                if(backupData && backupData.name) {
-                    activeName = backupData.name;
-                    isWh = backupData.isWarehouse;
-                    isSec = backupData.isSecurityOnly;
-                    res.note += "⚠️ 6月結算存檔 ";
-                }
+            if(room.leaveDate) {
+                res.note += `[退宿日: ${room.leaveDate}] `;
             }
 
-            let baseFee = configParams.mgmtFee;
-            if (roomId === "5-1") baseFee = configParams.suiteFee;
-            if (isWh) baseFee = configParams.whFee;
-
-            if (activeName) {
+            // 3. 【管理費金額計價】
+            if(activeName) {
                 res.nameDisplay = activeName;
-                res.mgmtFee = baseFee;
-
-                if(isWar) { res.mgmtFee = 0; res.note += "舍監免收 "; }
-                if(isSec) { res.mgmtFee = 0; res.note += "保全免收 "; }
-                if(isRet) { res.mgmtFee = configParams.whFee; res.note += `留停轉倉庫(${retReason || ''}) `; }
-                if(hasRm && rmName) { res.nameDisplay += ` + ${rmName}`; }
-                if(room.isTemp) { res.mgmtFee = 0; res.note += "臨時短住免月費 "; }
-                if(room.isBookingFuture && !res.note.includes("已退宿")) { res.nameDisplay = "(空房)"; res.mgmtFee = 0; }
+                res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
+                
+                if(room.isWarden || room.isSecurityOnly) res.mgmtFee = 0;
+                if(room.isTemp) res.mgmtFee = 0;
+                if(room.isBookingFuture && !room.leaveDate) { res.nameDisplay = "(空房)"; res.mgmtFee = 0; }
 
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
@@ -782,11 +738,16 @@
             let isLocked = isCurrentMonthLocked();
             let disabledStr = isLocked ? "disabled" : "";
 
+            // 強制由近至遠（最新日期在最上面）排序
+            if(room.readings) {
+                room.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
+            }
+
             let html = `
                 <h2>🚪 房間詳情管理: ${roomId}</h2>
                 <div id="meter-section">
-                    <h3>⚡ 電表抄表紀錄 (今日預設：${TODAY_STR})</h3>
-                    <p>當前計費電價：<b>$${ELECTRICITY_RATE}</b> 元 / 度 ${isLocked ? '<span style="color:red;">(此月已結案鎖定，無法輸入)</span>':''}</p>
+                    <h3>⚡ 電表抄表紀錄 (最新日期在最上方)</h3>
+                    <p>當前計費電價：<b>$${ELECTRICITY_RATE}</b> 元 / 度</p>
                     <div style="display:flex; gap:10px; margin-bottom:12px; max-width:400px;">
                         <input type="number" step="0.1" id="new-meter-value" placeholder="請輸入最新電表度數" ${disabledStr}>
                         <input type="date" id="new-meter-date" value="${TODAY_STR}" ${disabledStr}>
@@ -802,7 +763,7 @@
                 
                 <div class="bill-summary-box" style="background:#f9f9f9; border-color:#ccc;">
                     <h3>📋 房間狀態與基本資料</h3>
-                    <p><b>房客大名：</b> ${room.name || '暫無長期房客 (空房)'}</p>
+                    <p><b>房客大名：</b> ${room.name || room.lastArchivedName || '暫無長期房客 (空房)'}</p>
                     ${room.hasRoommate ? `<p><b>同住室友：</b> ${room.roommateName || ''}</p>`:''}
                     <p><b>入住日期：</b> ${room.checkInDate || '—'}</p>
                     ${room.leaveDate ? `<p style="color:red;"><b>預定退宿日期：</b> ${room.leaveDate}</p>`:''}
@@ -817,11 +778,33 @@
             if(!room || !room.readings || room.readings.length === 0) return `<tr><td colspan="3">暫無抄表紀錄</td></tr>`;
             return room.readings.map((r, idx) => `
                 <tr>
-                    <td>${r.date}</td>
+                    <td><b>${r.date}</b></td>
                     <td>${r.value}</td>
                     <td><button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteReading('${roomId}', ${idx})">刪除</button></td>
                 </tr>
             `).join('');
+        }
+
+        function addMeterReading(roomId) {
+            const valInput = document.getElementById('new-meter-value');
+            const dateInput = document.getElementById('new-meter-date');
+            if(!valInput || !valInput.value) return;
+
+            if(!rooms[roomId].readings) rooms[roomId].readings = [];
+            rooms[roomId].readings.push({ date: dateInput.value, value: parseFloat(valInput.value) });
+            
+            // 寫入後立即進行由近至遠排序
+            rooms[roomId].readings.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            alert(`✅ 電表紀錄已儲存！`);
+            saveToCloud();
+        }
+
+        function deleteReading(roomId, idx) {
+            if(confirm("確定要刪除這筆抄表紀錄嗎？")) {
+                rooms[roomId].readings.splice(idx, 1);
+                saveToCloud();
+            }
         }
 
         function renderMultiTempStayLogs(roomId) {
@@ -835,39 +818,6 @@
             });
             html += `</ul>`;
             return html;
-        }
-
-        // 4. 修正：徹底防呆與確實計入 6 月電費
-        function addMeterReading(roomId) {
-            const valInput = document.getElementById('new-meter-value');
-            const dateInput = document.getElementById('new-meter-date');
-            if(!valInput || !valInput.value) return;
-
-            let targetDate = dateInput.value;
-            const parts = targetDate.split('-');
-            
-            // 只要是在 7/01~7/05 之間抄表，主動引導併校正歸屬於 6/30，以計收 6 月電費
-            if (parts.length === 3 && parts[1] === "07") {
-                const dayVal = parseInt(parts[2]);
-                if (dayVal >= 1 && dayVal <= 5) {
-                    if (confirm(`💡 檢測到您在 7 月份開頭 (${targetDate}) 進行抄表。\n請問此電表度數是否屬於「6 月份」的止數結算？\n\n[按確定]：歸入 6 月電費 (系統儲存日期將變更為 2026-06-30)\n[按取消]：仍記在 7 月電費`)) {
-                        targetDate = "2026-06-30"; 
-                    }
-                }
-            }
-
-            if(!rooms[roomId].readings) rooms[roomId].readings = [];
-            rooms[roomId].readings.push({ date: targetDate, value: parseFloat(valInput.value) });
-            
-            alert(`✅ 電表紀錄已新增！(計費歸屬月份為：${targetDate.startsWith("2026-06") ? '6月份' : '7月份'})`);
-            saveToCloud();
-        }
-
-        function deleteReading(roomId, idx) {
-            if(confirm("確定要刪除這筆抄表紀錄嗎？")) {
-                rooms[roomId].readings.splice(idx, 1);
-                saveToCloud();
-            }
         }
 
         function deleteTempStayRecord(roomId, idx) {
@@ -902,7 +852,7 @@
             Object.keys(ALL_FLOORS).forEach(floor => {
                 ALL_FLOORS[floor].forEach(r => {
                     if(!r.includes("公共")) {
-                        optionsHtml += `<option value="${r}">${r} (${rooms[r]?.name ? rooms[r].name : '空房'})</option>`;
+                        optionsHtml += `<option value="${r}">${r} (${rooms[r]?.name ? rooms[r].name : '空房'})</option>';
                     }
                 });
             });
@@ -1070,7 +1020,7 @@
 
             rooms[roomId].leaveDate = lDate;
             alert(`✅ 房間 ${roomId} 已設定預定退宿清除日為 ${lDate}`);
-            closeModal('apply-leave-modal');
+            closeModal('leave-room-modal');
             saveToCloud();
         }
 
