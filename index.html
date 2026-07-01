@@ -81,7 +81,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v30) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
+        <h1>🏠 宿舍管理系統 (v31) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -127,6 +127,7 @@
         </div>
     </div>
 
+    <!-- 彈出視窗（Modal）區塊 -->
     <div id="apply-stay-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
@@ -222,7 +223,7 @@
                 <label>留停開始日期：</label>
                 <input type="date" id="sr-leave-start" value="2026-07-01" onchange="calculateRetentionFeePreview()">
                 <label>留停預估結束日期：</label>
-                <input type="date" id="sr-leave-end" value="2026-08-01" onchange="calculateRetentionFeePreview()">
+                <input type="date" id="sr-leave-end" value="2026-08-01" onchange="changeReportMonth(this.value)">
                 
                 <div class="calc-preview" id="retention-calc-box">
                     💡 請輸入正確的起迄日期進行預收費用試算。
@@ -281,7 +282,7 @@
             '第三排': ['3-1','3-2','3-3','3-4','3-5','3-6','3-7'],
             '第四排': ['4-1','4-2','4-3','4-4','4-5','4-6','4-7'],
             '第五排': ['5-1'],
-            '公共區域': ['公共區域A', '公共開放區域B']
+            '公共區域': ['公共區域A', '公共區域B']
         };
 
         let currentActiveView = "home"; 
@@ -461,7 +462,7 @@
                     
                     let displayName = roomId; let tags = ''; let isEmpty = false;
 
-                    if (roomId.includes("公共區域") || roomId.includes("公共開放區域")) {
+                    if (roomId.includes("公共區域")) {
                         displayName = roomId;
                     } else if (room.isSpecialLock) {
                         displayName = `${roomId} 備品室`;
@@ -481,7 +482,7 @@
                     item.className = `room-item ${roomId === currentActiveView ? 'active' : ''} ${isEmpty ? 'empty-room' : ''}`;
                     if (room.isDriverOnly && !room.name) tags += '<span class="tag tag-special" style="background:#5c6bc0;">司領房</span>';
                     
-                    if (!roomId.includes("公共區域") && !roomId.includes("公共開放區域")) {
+                    if (!roomId.includes("公共區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
                         } else if (room.name) {
@@ -500,6 +501,8 @@
                                 tags += `<span class="tag tag-temp">${dateLabel}臨時</span>`; 
                             }
                             if (room.leaveDate && !room.isTemp) { tags += `<span class="tag tag-leave">預退</span>`; }
+                        } else if (room.leaveDate && !room.name) {
+                            tags += `<span class="tag tag-leave">${monthStrFilter(room.leaveDate)}已退</span>`;
                         }
                     }
                     
@@ -513,6 +516,12 @@
                 floorDiv.appendChild(floorContent);
                 list.appendChild(floorDiv);
             });
+        }
+
+        function monthStrFilter(dateStr) {
+            if(!dateStr) return "";
+            const p = dateStr.split('-');
+            return p.length >= 2 ? `${parseInt(p[1])}月` : "";
         }
 
         function toggleFloor(el) {
@@ -557,6 +566,7 @@
                                 ${generateMonthOptions()}
                             </select>
                             ${lockBadge}
+                            <button onclick="exportTableToExcel('finance-table')" style="background-color: #2e7d32; font-size: 13px; padding: 6px 12px; margin-left:10px;">📥 下載 XLS 報表</button>
                         </div>
                         <button onclick="toggleLockMonth()" style="background:${isLocked?'#666':'#d9534f'}; margin:0; padding:8px 12px; font-size:13px;">${lockBtnText}</button>
                     </div>
@@ -564,7 +574,7 @@
                 </div>
                 
                 <div class="table-responsive">
-                    <table>
+                    <table id="finance-table">
                         <thead>
                             <tr style="background:#0f4c2a; color:white;">
                                 <th>房號</th>
@@ -689,8 +699,18 @@
             let isWh = room.isWarehouse;
 
             if(!activeName && room.leaveDate && room.leaveDate.startsWith(monthStr)) {
-                activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.name || "已退宿者";
-                isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : true;
+                activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.name || "";
+                isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : false;
+            }
+
+            if(room.isTemp) {
+                let hasTempInThisMonth = false;
+                if(room.tempList && room.tempList.length > 0) {
+                    hasTempInThisMonth = room.tempList.some(t => t.startDate && t.startDate.startsWith(monthStr));
+                }
+                if(!hasTempInThisMonth) {
+                    activeName = ""; 
+                }
             }
 
             if(room.leaveDate) {
@@ -703,7 +723,7 @@
                 
                 if(room.isWarden || room.isSecurityOnly) res.mgmtFee = 0;
                 if(room.isTemp) res.mgmtFee = 0;
-                if(room.isBookingFuture && !room.leaveDate) { res.nameDisplay = "(空房)"; res.mgmtFee = 0; }
+                if(room.isBookingFuture && !room.leaveDate && !room.isTemp) { res.nameDisplay = "(空房)"; res.mgmtFee = 0; }
 
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
@@ -729,6 +749,8 @@
                 room.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
             }
 
+            let isPublicArea = roomId.includes("公共區域");
+
             let html = `
                 <h2>🚪 房間詳情管理: ${roomId}</h2>
                 <div id="meter-section">
@@ -746,16 +768,26 @@
                         </table>
                     </div>
                 </div>
-                
-                <div class="bill-summary-box" style="background:#f9f9f9; border-color:#ccc;">
-                    <h3>📋 房間狀態與基本資料</h3>
-                    <p><b>房客大名：</b> ${room.name || room.lastArchivedName || '暫無長期房客 (空房)'}</p>
-                    ${room.hasRoommate ? `<p><b>同住室友：</b> ${room.roommateName || ''}</p>`:''}
-                    <p><b>入住日期：</b> ${room.checkInDate || '—'}</p>
-                    ${room.leaveDate ? `<p style="color:red;"><b>預定退宿日期：</b> ${room.leaveDate}</p>`:''}
-                    ${renderMultiTempStayLogs(roomId)}
-                </div>
             `;
+
+            if (!isPublicArea) {
+                html += `
+                    <div class="bill-summary-box" style="background:#f9f9f9; border-color:#ccc;">
+                        <h3>📋 房間狀態與基本資料</h3>
+                        <p><b>房客大名：</b> ${room.name || room.lastArchivedName || '暫無長期房客 (空房)'}</p>
+                        ${room.hasRoommate ? `<p><b>同住室友：</b> ${room.roommateName || ''}</p>`:''}
+                        <p><b>入住日期：</b> ${room.checkInDate || '—'}</p>
+                        ${room.leaveDate ? `<p style="color:red;"><b>預定退宿日期：</b> ${room.leaveDate}</p>`:''}
+                        ${renderMultiTempStayLogs(roomId)}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="bill-summary-box" style="background:#f5f5f5; border-color:#bbb; color:#666;">
+                        💡 <b>提示：</b>本區域為公共場域，系統不開放辦理入住與狀態需求申請。
+                    </div>
+                `;
+            }
             displayArea.innerHTML = html;
         }
 
@@ -1005,8 +1037,29 @@
 
             rooms[roomId].leaveDate = lDate;
             alert(`✅ 房間 ${roomId} 已設定預定退宿清除日為 ${lDate}`);
-            closeModal('leave-room-modal');
+            closeModal('apply-leave-modal');
             saveToCloud();
+        }
+
+        function exportTableToExcel(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            let html = table.outerHTML;
+            // 加上 BOM 頭與簡單的 Excel 格式包裝讓中文不亂碼
+            let excelFile = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'>";
+            excelFile += "<head><meta charset='utf-8'><!--[if gte mso 9]><xml><x:Workbook><x:Worksheets><x:Worksheet><x:Name>DormReport</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:Worksheet></x:Worksheets></x:Workbook></xml><![endif]--></head><body>";
+            excelFile += html;
+            excelFile += "</body></html>";
+
+            const blob = new Blob([excelFile], { type: "application/vnd.ms-excel;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `宿舍財務清冊_${selectedReportMonth}.xls`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
 
         function exportData() {
