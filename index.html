@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v37) </h1>
+        <h1>🏠 宿舍管理系統 (v36) </h1>
         <div style="width:10px;"></div>
     </nav>
 
@@ -109,9 +109,9 @@
             
             <div class="setting-panel">
                 <b style="color: var(--main-green);">⚙️ 費率變更與實施設定</b>
-                <label style="display:block; margin-top:6px;">一般月管理費：<input type="number" id="cfg-mgmt-fee" value="1400"></label>
+                <label style="display:block; margin-top:6px;">一般月管理費：<input type="number" id="cfg-mgmt-fee" value="1600"></label>
                 <label style="display:block;">倉庫月管理費：<input type="number" id="cfg-wh-fee" value="500"></label>
-                <label style="display:block;">5-1套房管理費：<input type="number" id="cfg-suite-fee" value="1400"></label>
+                <label style="display:block;">5-1套房管理費：<input type="number" id="cfg-suite-fee" value="2400"></label>
                 <label style="display:block;">實施公告日期：<input type="date" id="cfg-effective-date" value="2026-07-01"></label>
                 <button onclick="saveConfigParams()" style="width:100%; padding:6px; font-size:13px; background:#4caf50; margin-top:4px;">套用並記錄新費率</button>
                 
@@ -243,7 +243,7 @@
         const TODAY_STR = "2026-07-01"; 
 
         let rooms = {}; 
-        let configParams = { mgmtFee: 1400, whFee: 500, suiteFee: 1400, historyLogs: [], deferredPayment: {}, lockedMonths: {} };
+        let configParams = { mgmtFee: 1600, whFee: 500, suiteFee: 2400, historyLogs: [], deferredPayment: {}, lockedMonths: {} };
         let selectedReportMonth = "2026-06"; 
         let currentActiveView = "home"; 
 
@@ -295,11 +295,20 @@
             Object.keys(rooms).forEach(roomId => {
                 const room = rooms[roomId];
                 if (room.tempList && room.tempList.length > 0) {
-                    syncActiveTempRecord(roomId);
+                    room.tempList = room.tempList.filter(t => !t.endDate || t.endDate > TODAY_STR);
+                    if (room.tempList.length === 0) {
+                        delete room.tempList;
+                        if(room.isTemp) {
+                            room.name = ''; room.isTemp = false; room.tempInfo = null; room.checkInDate = ''; room.leaveDate = '';
+                        }
+                    } else {
+                        syncActiveTempRecord(roomId);
+                    }
                 } 
                 if (room.leaveDate && room.leaveDate < TODAY_STR && !room.isTemp) {
                     if (room.name) {
-                        archiveRoomStay(room);
+                        room.lastArchivedName = room.name; 
+                        room.lastArchivedIsWarehouse = room.isWarehouse;
                         room.name = ''; 
                     }
                 }
@@ -318,32 +327,6 @@
             room.checkInDate = activeTemp.startDate;
             room.leaveDate = activeTemp.endDate;
             room.tempInfo = activeTemp;
-        }
-
-        function archiveRoomStay(room) {
-            if(!room.name) return; 
-            if(!room.stayHistory) room.stayHistory = [];
-            room.stayHistory.push({
-                name: room.name,
-                isWarehouse: !!room.isWarehouse,
-                isWarden: !!room.isWarden,
-                isSecurityOnly: !!room.isSecurityOnly,
-                hasRoommate: !!room.hasRoommate,
-                roommateName: room.roommateName || "",
-                checkInDate: room.checkInDate || "",
-                leaveDate: room.leaveDate || ""
-            });
-            room.lastArchivedName = room.name;
-            room.lastArchivedIsWarehouse = room.isWarehouse;
-        }
-
-        function findHistoryLeaveInMonth(room, monthStr) {
-            if(!room || !room.stayHistory || room.stayHistory.length === 0) return null;
-            for(let i = room.stayHistory.length - 1; i >= 0; i--) {
-                const h = room.stayHistory[i];
-                if(h.leaveDate && h.leaveDate.startsWith(monthStr)) return h;
-            }
-            return null;
         }
 
         async function loadCloudData() {
@@ -373,9 +356,9 @@
             if(!configParams.historyLogs) configParams.historyLogs = [];
             if(!configParams.deferredPayment) configParams.deferredPayment = {};
             if(!configParams.lockedMonths) configParams.lockedMonths = {};
-            if(!configParams.mgmtFee) configParams.mgmtFee = 1400;
+            if(!configParams.mgmtFee) configParams.mgmtFee = 1600;
             if(!configParams.whFee) configParams.whFee = 500;
-            if(!configParams.suiteFee) configParams.suiteFee = 1400;
+            if(!configParams.suiteFee) configParams.suiteFee = 2400;
 
             document.getElementById('cfg-mgmt-fee').value = configParams.mgmtFee;
             document.getElementById('cfg-wh-fee').value = configParams.whFee;
@@ -445,27 +428,7 @@
                     }
                     if(roomId === "2-2") rooms[roomId].isSpecialLock = true;
                     if(roomId === "4-1" || roomId === "4-2") rooms[roomId].isDriverOnly = true;
-
-                    migrateLegacyArchiveIfNeeded(rooms[roomId]);
                 });
-            });
-        }
-
-        function migrateLegacyArchiveIfNeeded(room) {
-            if (!room || room.name) return;
-            if (!room.lastArchivedName || !room.leaveDate) return;
-            const monthStr = room.leaveDate.slice(0, 7);
-            if (findHistoryLeaveInMonth(room, monthStr)) return; 
-            if (!room.stayHistory) room.stayHistory = [];
-            room.stayHistory.push({
-                name: room.lastArchivedName,
-                isWarehouse: !!room.lastArchivedIsWarehouse,
-                isWarden: !!room.isWarden,
-                isSecurityOnly: !!room.isSecurityOnly,
-                hasRoommate: !!room.hasRoommate,
-                roommateName: room.roommateName || "",
-                checkInDate: room.checkInDate || "",
-                leaveDate: room.leaveDate
             });
         }
 
@@ -499,6 +462,9 @@
                         if(room.hasRoommate && room.roommateName) nameStr += ` + ${room.roommateName}`;
                         displayName = `${roomId} ${nameStr}`;
                         if(room.isBookingFuture) displayName = `${roomId}`;
+                    } else if (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth)) {
+                        let nameStr = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退客房";
+                        displayName = `${roomId} ${nameStr}`;
                     } else {
                         displayName = `${roomId} (空房)`;
                         isEmpty = true;
@@ -507,10 +473,10 @@
                     item.className = `room-item ${roomId === currentActiveView ? 'active' : ''} ${isEmpty ? 'empty-room' : ''}`;
                     if (room.isDriverOnly && !room.name) tags += '<span class="tag tag-special" style="background:#5c6bc0;">司領房</span>';
                     
-                    if (!roomId.includes("公共區域") && !isEmpty) {
+                    if (!roomId.includes("公共區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
-                        } else {
+                        } else if (room.name || (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth))) {
                             if (room.isWarden) { tags += '<span class="tag tag-warden">舍監</span>'; }
                             if (room.isLeaveRetention) { tags += `<span class="tag tag-leave-status">⏳ 留停房</span>`; }
                             if (room.isSecurityOnly) { tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>'; }
@@ -635,6 +601,7 @@
                         companyElec += calc.elecFee;
                     }
 
+                    // 建立跨月遞延的 Checkbox 控制鍵
                     let deferKey = `${roomId}_${selectedReportMonth}`;
                     let isDeferred = (configParams.deferredPayment && configParams.deferredPayment[deferKey] === true);
                     let checkboxStr = calc.isTenantCharge ? `<input type="checkbox" onchange="toggleDeferPayment('${roomId}', '${selectedReportMonth}', this.checked)" ${isDeferred ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>` : '—';
@@ -689,6 +656,7 @@
             document.getElementById('report-month-select').value = selectedReportMonth;
         }
 
+        // 當使用者在清冊點選「延至下期」時觸發
         async function toggleDeferPayment(roomId, monthStr, isChecked) {
             if(!configParams.deferredPayment) configParams.deferredPayment = {};
             let deferKey = `${roomId}_${monthStr}`;
@@ -696,7 +664,7 @@
             await saveToCloud();
         }
 
-        generateMonthOptions = function() {
+        function generateMonthOptions() {
             let options = "";
             for(let m=1; m<=12; m++) {
                 let mStr = m < 10 ? `0${m}` : `${m}`;
@@ -711,6 +679,7 @@
             showDefaultHome();
         }
 
+        // 核心計費機制：修復退宿覆蓋問題、串接跨月收費遞延機制
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
@@ -719,36 +688,29 @@
 
             let isPublic = roomId.includes("公共");
             let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
-            let historyMatch = findHistoryLeaveInMonth(room, monthStr);
             let activeName = "";
             let isWh = room.isWarehouse;
-            let wardenFlag = room.isWarden;
-            let securityFlag = room.isSecurityOnly;
 
+            // 1. 核心大名與計費主體判定
             if (isPublic) {
                 res.nameDisplay = "公共分攤區域";
                 res.isTenantCharge = false; 
-            } else if (historyMatch) {
-                activeName = historyMatch.name || "已退宿房客";
-                isWh = historyMatch.isWarehouse;
-                wardenFlag = historyMatch.isWarden;
-                securityFlag = historyMatch.isSecurityOnly;
-                res.note += `[${monthStrFilter(historyMatch.leaveDate)}退宿清算] `;
-                res.isTenantCharge = true;
             } else if (isLeavedInThisMonth) {
+                // 退宿人員擁有最高優先級顯示權，防止被過濾為空房
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
                 res.note += `[${monthStrFilter(room.leaveDate)}退宿清算] `;
                 res.isTenantCharge = true; 
             } else if (room.name) {
                 if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
-                    activeName = ""; 
+                    activeName = ""; // 未來預約在當月仍視為空房
                 } else {
                     activeName = room.name;
                     res.isTenantCharge = true; 
                 }
             }
 
+            // 臨時入住判定
             if(room.isTemp && !isPublic && !isLeavedInThisMonth) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
@@ -764,22 +726,32 @@
                 }
             }
 
+            // 2. 抄表用電區間定位
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
-                let currentMonthReadings = sorted.filter(r => r.date.startsWith(monthStr));
-                let priorMonthReadings = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
-                
-                if (currentMonthReadings.length > 0) {
-                    res.curr = currentMonthReadings[0].value;
-                } else if (isLeavedInThisMonth && sorted.length > 0) {
-                    res.curr = sorted[0].value;
-                }
-                
-                if (priorMonthReadings.length > 0) {
-                    res.prev = priorMonthReadings[0].value;
-                } else if (sorted.length > 1) {
-                    res.prev = sorted[sorted.length - 1].value;
+                if (monthStr === "2026-06") {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) {
+                        res.curr = currList[currList.length - 1].value;
+                    } else if (isLeavedInThisMonth && sorted.length > 0) {
+                        res.curr = sorted[sorted.length - 1].value; 
+                    }
+                } else if (monthStr === "2026-07") {
+                    let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => r.date.startsWith("2026-07") && new Date(r.date) > new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+                } else {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
                 }
 
                 if(res.prev !== "—" && res.curr !== "—") {
@@ -788,6 +760,7 @@
                 }
             }
 
+            // 3. 特殊房管控
             if(room.isSpecialLock) { 
                 res.nameDisplay = room.name || "備品室"; 
                 res.isTenantCharge = false;
@@ -795,11 +768,12 @@
                 return res; 
             }
 
+            // 4. 計算常規基本費用
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
                 
-                if(wardenFlag || securityFlag || room.isTemp) res.mgmtFee = 0;
+                if(room.isWarden || room.isSecurityOnly || room.isTemp) res.mgmtFee = 0;
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
                 res.nameDisplay = "司領房"; res.isTenantCharge = false; res.total = res.elecFee;
@@ -810,13 +784,16 @@
                 res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
 
+            // 5. 跨月收費遞延（未收延至下期）進階處理邏輯
             if (res.isTenantCharge) {
+                // (A) 檢查本月這筆費用是否被設定為「遞延至下期收」
                 let currentDeferKey = `${roomId}_${monthStr}`;
                 if (configParams.deferredPayment && configParams.deferredPayment[currentDeferKey] === true) {
                     res.note += `[⚠️ 本期遞延至下期收費] `;
-                    res.total = 0; 
+                    res.total = 0; // 當月應收總計歸零
                 }
 
+                // (B) 檢查上個月是否有遞延過來的未收款需要在此時併入
                 let parts = monthStr.split('-');
                 let year = parseInt(parts[0]);
                 let prevMonthNum = parseInt(parts[1]) - 1;
@@ -825,6 +802,7 @@
                 
                 let prevDeferKey = `${roomId}_${prevMonthStr}`;
                 if (configParams.deferredPayment && configParams.deferredPayment[prevDeferKey] === true) {
+                    // 重新算一次上個月本來應該收多少錢
                     let prevCalc = calculateRoomBillRawAmount(roomId, prevMonthStr);
                     if (prevCalc > 0) {
                         res.total += prevCalc;
@@ -836,34 +814,37 @@
             return res;
         }
 
+        // 輔助函式：用來單純計算某個房間在某月份的原始帳款（不受本身遞延狀態歸零影響），提供遞延加總使用
         function calculateRoomBillRawAmount(roomId, monthStr) {
             const room = rooms[roomId];
             if(!room) return 0;
-            let historyMatch = findHistoryLeaveInMonth(room, monthStr);
             let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
-            let activeName = historyMatch ? historyMatch.name : (isLeavedInThisMonth ? (room.lastArchivedName || room.name) : room.name);
-            let isWh = historyMatch ? historyMatch.isWarehouse : (isLeavedInThisMonth ? (room.lastArchivedIsWarehouse || room.isWarehouse) : room.isWarehouse);
-            let wardenFlag = historyMatch ? historyMatch.isWarden : room.isWarden;
-            let securityFlag = historyMatch ? historyMatch.isSecurityOnly : room.isSecurityOnly;
+            let activeName = isLeavedInThisMonth ? (room.lastArchivedName || room.name) : room.name;
+            let isWh = isLeavedInThisMonth ? (room.lastArchivedIsWarehouse || room.isWarehouse) : room.isWarehouse;
 
             let eFee = 0;
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 let prev = "—", curr = "—";
-                
-                let currentMonthReadings = sorted.filter(r => r.date.startsWith(monthStr));
-                let priorMonthReadings = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
-                
-                if (currentMonthReadings.length > 0) curr = currentMonthReadings[0].value;
-                if (priorMonthReadings.length > 0) prev = priorMonthReadings[0].value;
-                
+                if (monthStr === "2026-06") {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
+                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
+                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) curr = currList[currList.length - 1].value;
+                    else if (isLeavedInThisMonth && sorted.length > 0) curr = sorted[sorted.length - 1].value;
+                } else {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
+                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
+                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
+                    if(currList.length > 0) curr = currList[currList.length - 1].value;
+                }
                 if(prev !== "—" && curr !== "—") {
                     let deg = Math.max(0, Math.round((curr - prev) * 10) / 10);
                     eFee = Math.round(deg * ELECTRICITY_RATE);
                 }
             }
             let mFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
-            if(wardenFlag || securityFlag || room.isTemp || room.isSpecialLock) mFee = 0;
+            if(room.isWarden || room.isSecurityOnly || room.isTemp || room.isSpecialLock) mFee = 0;
             return eFee + mFee;
         }
 
@@ -913,7 +894,7 @@
                 html += `
                     <div class="bill-summary-box" style="background:#f9f9f9; border-color:#ccc;">
                         <h3>📋 房間狀態與基本資料</h3>
-                        <p><b>房客大名：</b> ${room.name || '暫無長期房客 (空房)'}</p>
+                        <p><b>房客大名：</b> ${room.name || room.lastArchivedName || '暫無長期房客 (空房)'}</p>
                         ${room.hasRoommate ? `<p><b>同住室友：</b> ${room.roommateName || ''}</p>`:''}
                         <p><b>入住日期：</b> ${room.checkInDate || '—'}</p>
                         ${room.leaveDate ? `<p style="color:red;"><b>預定退宿日期：</b> ${room.leaveDate}</p>`:''}
@@ -1064,19 +1045,11 @@
             if(!roomId || !name) { alert("請填寫完整房間與姓名"); return; }
 
             const room = rooms[roomId];
-
-            if (room.name && room.name !== name) {
-                archiveRoomStay(room);
-            }
-
             room.name = name;
             room.checkInDate = startDate;
-            room.leaveDate = ""; 
             room.isWarehouse = (type === 'WAREHOUSE');
             room.isWarden = (type === 'WARDEN');
             room.isSecurityOnly = (type === 'SECURITY');
-            room.hasRoommate = false;
-            room.roommateName = "";
             
             if(type === 'ROOMMATE') {
                 room.hasRoommate = true;
