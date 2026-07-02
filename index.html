@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v36) </h1>
+        <h1>🏠 宿舍管理系統 (v37.2) </h1>
         <div style="width:10px;"></div>
     </nav>
 
@@ -115,7 +115,7 @@
                 <label style="display:block;">實施公告日期：<input type="date" id="cfg-effective-date" value="2026-07-01"></label>
                 <button onclick="saveConfigParams()" style="width:100%; padding:6px; font-size:13px; background:#4caf50; margin-top:4px;">套用並記錄新費率</button>
                 
-                <div style="margin-top:10px; font-weight:bold; color:#555;">📋 費率變更歷史：</div>
+                <div style="margin-top:10px; font-weight:bold; color:#555;">📋 費率變硬歷史：</div>
                 <div class="history-log-box" id="rate-history-log">暫無歷史變更紀錄</div>
             </div>
             
@@ -291,31 +291,42 @@
             return configParams.lockedMonths[selectedReportMonth] === true;
         }
 
-        function checkAndProcessDateStatus() {
+        async function checkAndProcessDateStatus() {
+            let needsSave = false;
             Object.keys(rooms).forEach(roomId => {
                 const room = rooms[roomId];
                 if (room.tempList && room.tempList.length > 0) {
+                    const origLen = room.tempList.length;
                     room.tempList = room.tempList.filter(t => !t.endDate || t.endDate > TODAY_STR);
+                    if (room.tempList.length !== origLen) needsSave = true;
                     if (room.tempList.length === 0) {
                         delete room.tempList;
                         if(room.isTemp) {
                             room.name = ''; room.isTemp = false; room.tempInfo = null; room.checkInDate = ''; room.leaveDate = '';
+                            needsSave = true;
                         }
                     } else {
                         syncActiveTempRecord(roomId);
                     }
                 } 
-                if (room.leaveDate && room.leaveDate < TODAY_STR && !room.isTemp) {
+                // 修正：判定符號改為 <= 確保到期當天或過後皆能執行，並加入 needsSave 觸發同步持久化
+                if (room.leaveDate && room.leaveDate <= TODAY_STR && !room.isTemp) {
                     if (room.name) {
                         room.lastArchivedName = room.name; 
                         room.lastArchivedIsWarehouse = room.isWarehouse;
                         room.name = ''; 
+                        needsSave = true;
                     }
                 }
                 if (room.isBookingFuture && room.checkInDate && room.checkInDate <= TODAY_STR) {
                     room.isBookingFuture = false;
+                    needsSave = true;
                 }
             });
+            // 修正：偵測到狀態改變時，自動將退宿結果同步回雲端，避免重整後失效
+            if (needsSave) {
+                await saveToCloud();
+            }
         }
 
         function syncActiveTempRecord(roomId) {
@@ -351,7 +362,7 @@
             } declareDataFields();
         }
 
-        function declareDataFields() {
+        async function declareDataFields() {
             if(!configParams) configParams = {};
             if(!configParams.historyLogs) configParams.historyLogs = [];
             if(!configParams.deferredPayment) configParams.deferredPayment = {};
@@ -365,7 +376,7 @@
             document.getElementById('cfg-suite-fee').value = configParams.suiteFee;
 
             initMissingRooms();
-            checkAndProcessDateStatus(); 
+            await checkAndProcessDateStatus(); // 修正：加入 await 確保同步完成
             renderRoomList();
             renderRateHistory();
             
@@ -601,7 +612,6 @@
                         companyElec += calc.elecFee;
                     }
 
-                    // 建立跨月遞延的 Checkbox 控制鍵
                     let deferKey = `${roomId}_${selectedReportMonth}`;
                     let isDeferred = (configParams.deferredPayment && configParams.deferredPayment[deferKey] === true);
                     let checkboxStr = calc.isTenantCharge ? `<input type="checkbox" onchange="toggleDeferPayment('${roomId}', '${selectedReportMonth}', this.checked)" ${isDeferred ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>` : '—';
@@ -656,7 +666,6 @@
             document.getElementById('report-month-select').value = selectedReportMonth;
         }
 
-        // 當使用者在清冊點選「延至下期」時觸發
         async function toggleDeferPayment(roomId, monthStr, isChecked) {
             if(!configParams.deferredPayment) configParams.deferredPayment = {};
             let deferKey = `${roomId}_${monthStr}`;
@@ -679,7 +688,6 @@
             showDefaultHome();
         }
 
-        // 核心計費機制：修復退宿覆蓋問題、串接跨月收費遞延機制
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
@@ -691,26 +699,23 @@
             let activeName = "";
             let isWh = room.isWarehouse;
 
-            // 1. 核心大名與計費主體判定
             if (isPublic) {
                 res.nameDisplay = "公共分攤區域";
                 res.isTenantCharge = false; 
             } else if (isLeavedInThisMonth) {
-                // 退宿人員擁有最高優先級顯示權，防止被過濾為空房
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
                 res.note += `[${monthStrFilter(room.leaveDate)}退宿清算] `;
                 res.isTenantCharge = true; 
             } else if (room.name) {
                 if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
-                    activeName = ""; // 未來預約在當月仍視為空房
+                    activeName = ""; 
                 } else {
                     activeName = room.name;
                     res.isTenantCharge = true; 
                 }
             }
 
-            // 臨時入住判定
             if(room.isTemp && !isPublic && !isLeavedInThisMonth) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
@@ -726,7 +731,6 @@
                 }
             }
 
-            // 2. 抄表用電區間定位
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -760,7 +764,6 @@
                 }
             }
 
-            // 3. 特殊房管控
             if(room.isSpecialLock) { 
                 res.nameDisplay = room.name || "備品室"; 
                 res.isTenantCharge = false;
@@ -768,7 +771,6 @@
                 return res; 
             }
 
-            // 4. 計算常規基本費用
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
@@ -784,16 +786,13 @@
                 res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
 
-            // 5. 跨月收費遞延（未收延至下期）進階處理邏輯
             if (res.isTenantCharge) {
-                // (A) 檢查本月這筆費用是否被設定為「遞延至下期收」
                 let currentDeferKey = `${roomId}_${monthStr}`;
                 if (configParams.deferredPayment && configParams.deferredPayment[currentDeferKey] === true) {
                     res.note += `[⚠️ 本期遞延至下期收費] `;
-                    res.total = 0; // 當月應收總計歸零
+                    res.total = 0; 
                 }
 
-                // (B) 檢查上個月是否有遞延過來的未收款需要在此時併入
                 let parts = monthStr.split('-');
                 let year = parseInt(parts[0]);
                 let prevMonthNum = parseInt(parts[1]) - 1;
@@ -802,7 +801,6 @@
                 
                 let prevDeferKey = `${roomId}_${prevMonthStr}`;
                 if (configParams.deferredPayment && configParams.deferredPayment[prevDeferKey] === true) {
-                    // 重新算一次上個月本來應該收多少錢
                     let prevCalc = calculateRoomBillRawAmount(roomId, prevMonthStr);
                     if (prevCalc > 0) {
                         res.total += prevCalc;
@@ -814,7 +812,6 @@
             return res;
         }
 
-        // 輔助函式：用來單純計算某個房間在某月份的原始帳款（不受本身遞延狀態歸零影響），提供遞延加總使用
         function calculateRoomBillRawAmount(roomId, monthStr) {
             const room = rooms[roomId];
             if(!room) return 0;
@@ -1047,6 +1044,13 @@
             const room = rooms[roomId];
             room.name = name;
             room.checkInDate = startDate;
+            
+            // 修正：新同仁入住時，必須清空過去遺留的退宿日期與歷史封存，防止重載時觸發舊的退宿覆蓋邏輯
+            room.leaveDate = '';
+            room.lastArchivedName = '';
+            room.lastArchivedIsWarehouse = false;
+            room.isLeaveRetention = false;
+
             room.isWarehouse = (type === 'WAREHOUSE');
             room.isWarden = (type === 'WARDEN');
             room.isSecurityOnly = (type === 'SECURITY');
