@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v38.5-歷史履歷穩定版) </h1>
+        <h1>🏠 宿舍管理系統 (v38.6-歷史履歷穩定版) </h1>
         <div style="width:10px;"></div>
     </nav>
 
@@ -874,7 +874,7 @@
                 res.isTenantCharge = false;
             }
 
-            // ---- ⚡ 電表抄表度數區間試算 ----
+            // ---- ⚡ 電表抄表度數度數區間試算 ----
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -895,7 +895,6 @@
                         // 備援機制：如果完全沒抄表，才抓最後一筆
                         res.curr = sorted[sorted.length - 1].value; 
                     }
-                }
                 } else if (monthStr === "2026-07") {
                     let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
                     if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
@@ -939,7 +938,8 @@
                 res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
             return res;
-            }
+        }
+        
         function switchRoom(roomId) {
             currentActiveView = roomId;
             renderRoomList();
