@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v34) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
+        <h1>🏠 宿舍管理系統 (v35) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
         <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
     </nav>
 
@@ -587,7 +587,9 @@
                         <tbody>
             `;
 
-            let totalElec = 0, totalMgmt = 0, totalAll = 0;
+            // 拆分加總：房客部分 與 公司吸收(公共區域/空房)部分
+            let residentElec = 0, residentMgmt = 0, residentTotal = 0;
+            let companyElec = 0; 
             let groupIdx = 0;
 
             Object.keys(ALL_FLOORS).forEach(floorName => {
@@ -600,9 +602,14 @@
                     let rowClass = `floor-group-${groupIdx % 6}`;
                     let calc = calculateRoomBill(roomId, selectedReportMonth);
 
-                    totalElec += calc.elecFee;
-                    totalMgmt += calc.mgmtFee;
-                    totalAll += calc.total;
+                    // 判斷該帳目算在「房客收費」還是「公司自行吸收(空房/公共用電)」
+                    if (calc.isTenantCharge) {
+                        residentElec += calc.elecFee;
+                        residentMgmt += calc.mgmtFee;
+                        residentTotal += calc.total;
+                    } else {
+                        companyElec += calc.elecFee;
+                    }
 
                     html += `
                         <tr class="${rowClass}">
@@ -613,7 +620,7 @@
                             <td>${calc.degree}</td>
                             <td>$${calc.elecFee}</td>
                             <td>$${calc.mgmtFee}</td>
-                            <td style="color:#b22222; font-weight:bold;">$${calc.total}</td>
+                            <td style="color:${calc.isTenantCharge ? '#b22222' : '#666'}; font-weight:bold;">$${calc.total}</td>
                             <td style="text-align:left; font-size:12px; max-width:180px; color:#c62828;">${calc.note}</td>
                         </tr>
                     `;
@@ -621,13 +628,29 @@
                 groupIdx++;
             });
 
+            let finalGrandTotal = residentTotal + companyElec;
+
             html += `
-                            <tr style="background:#e2ede4; font-weight:bold; border-top:2px solid #0f4c2a;">
-                                <td colspan="5" style="text-align:right;">總計金額：</td>
-                                <td>$${totalElec}</td>
-                                <td>$${totalMgmt}</td>
-                                <td style="color:#d9534f; font-size:16px;">$${totalAll}</td>
-                                <td></td>
+                            <tr style="background:#fff9db; font-weight:bold; border-top:2px solid #e6db55;">
+                                <td colspan="5" style="text-align:right; color:#b22222;">👤 房客應收部分小計：</td>
+                                <td style="color:#b22222;">$${residentElec}</td>
+                                <td style="color:#b22222;">$${residentMgmt}</td>
+                                <td style="color:#b22222; font-size:15px;">$${residentTotal}</td>
+                                <td style="text-align:left; font-size:12px; color:#666;">向住宿同仁與倉庫計收之款項</td>
+                            </tr>
+                            <tr style="background:#f1f3f5; font-weight:bold; color:#495057;">
+                                <td colspan="5" style="text-align:right;">🏢 公共區域 / 空房自用電費小計：</td>
+                                <td>$${companyElec}</td>
+                                <td>$0</td>
+                                <td>$${companyElec}</td>
+                                <td style="text-align:left; font-size:12px; color:#666;">公司負擔吸收之內部公用及空置房電費</td>
+                            </tr>
+                            <tr style="background:#e2ede4; font-weight:bold; border-top:2px solid #0f4c2a; font-size:15px;">
+                                <td colspan="5" style="text-align:right; color:#0f4c2a;">📊 全廠電表與管理費總開銷 (大計)：</td>
+                                <td style="color:#0f4c2a;">$${residentElec + companyElec}</td>
+                                <td style="color:#0f4c2a;">$${residentMgmt}</td>
+                                <td style="color:#d9534f; font-size:18px;">$${finalGrandTotal}</td>
+                                <td style="text-align:left; font-size:12px; color:#0f4c2a;">(房客應收 $${residentTotal} + 公司吸收 $${companyElec})</td>
                             </tr>
                         </tbody>
                     </table>
@@ -652,50 +675,54 @@
             showDefaultHome();
         }
 
-        // v34 核心重構：嚴格依查詢月份區分身分，阻絕未來預約覆蓋退宿人員
+        // v35 核心計費重構：完整納入公共區域、空房電費、並正確歸類收費對象
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
-            let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "" };
+            let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
             
             if(!room) return res;
-            if(roomId.includes("公共")) { res.nameDisplay = "公共分攤"; return res; }
 
+            let isPublic = roomId.includes("公共");
             let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
             let activeName = "";
             let isWh = room.isWarehouse;
 
-            // 第一優先級：如果本月是該房的退宿月，強制抓退宿者歷史紀錄，不受未來預約影響
-            if (isLeavedInThisMonth) {
+            if (isPublic) {
+                res.nameDisplay = "公共分攤區域";
+                res.isTenantCharge = false; // 由公司自行吸收，不計入房客應收
+            } else if (isLeavedInThisMonth) {
+                // 第一優先級：本月退宿人員，強制鎖定其大名與費用身分
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
-                res.note += `[退宿日: ${room.leaveDate}] `;
-            } 
-            // 第二優先級：常規常駐或預約判定
-            else if (room.name) {
-                // 如果入住日大於這個月的月底，代表在當前查詢月份它只是「未來預約」，此月應視為空房
+                res.note += `[${monthStrFilter(room.leaveDate)}退宿清算] `;
+                res.isTenantCharge = true; // 退宿人員的費用仍需列入房客收費清冊
+            } else if (room.name) {
+                // 第二優先級：常規常駐判定
                 if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
-                    activeName = ""; 
+                    activeName = ""; // 未來的預約，在這個月視同空房
                 } else {
                     activeName = room.name;
+                    res.isTenantCharge = true; // 有人住的正常計費
                 }
             }
 
-            // 臨時入住判斷校正
-            if(room.isTemp) {
+            // 臨時入住彈性判定
+            if(room.isTemp && !isPublic) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
                     hasTempInThisMonth = room.tempList.some(t => t.startDate && t.startDate.startsWith(monthStr));
                 }
-                // 只有在當月有臨時入住，或者當月剛好退宿時才顯示大名
                 if(hasTempInThisMonth) {
                     activeName = room.name;
                     isWh = false;
+                    res.isTenantCharge = true;
                 } else if (!isLeavedInThisMonth) {
                     activeName = "";
+                    res.isTenantCharge = false;
                 }
             }
 
-            // 電表抄度計算
+            // 抄表度數區間定位計算
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -729,9 +756,15 @@
                 }
             }
 
-            if(room.isSpecialLock) { res.nameDisplay = room.name || "備品室"; return res; }
+            // 特殊行政限制管制房排除管理費
+            if(room.isSpecialLock) { 
+                res.nameDisplay = room.name || "備品室"; 
+                res.isTenantCharge = false;
+                res.total = res.elecFee;
+                return res; 
+            }
 
-            // 最終費用統計與大名輸出
+            // 最終金額加總與身分修飾
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
@@ -742,6 +775,14 @@
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
                 res.nameDisplay = "司領房";
+                res.isTenantCharge = false;
+                res.total = res.elecFee;
+            } else if (isPublic) {
+                res.total = res.elecFee; // 公共區域只有電費
+            } else {
+                // 純空房狀態（有零星抄表用電也會被算進去）
+                res.total = res.elecFee;
+                res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
 
             return res;
@@ -806,8 +847,8 @@
                 `;
             } else {
                 html += `
-                    <div class="bill-summary-box" style="background:#f5f5f5; border-color:#bbb; color:#666;">
-                        💡 <b>提示：</b>本區域為公共場域，系統不開放辦理入住與狀態需求申請。
+                    <div class="bill-summary-box" style="background:#f5f5f5; border-color:#bbb;">
+                        💡 <b>提示：</b>本區域為公共分攤場域，系統會於總體財務清冊自動帶出電費，但不開放辦理入住。
                     </div>
                 `;
             }
