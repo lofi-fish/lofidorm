@@ -853,21 +853,23 @@
                 }
             }
 
-            // 臨時入住與當月比對判定
-            if(room.isTemp && !isPublic && !isLeavedInThisMonth) {
-                let hasTempInThisMonth = false;
-                if(room.tempList && room.tempList.length > 0) {
-                    hasTempInThisMonth = room.tempList.some(t => t.startDate && isDateInMonth(t.startDate, monthStr));
-                }
-                if(hasTempInThisMonth) {
-                    activeName = room.name;
-                    isWh = false;
-                    res.isTenantCharge = true;
-                } else {
-                    activeName = "";
-                    res.isTenantCharge = false;
-                }
-            }
+//  修正後的安全程式碼：只有在「非當月退宿人員」的情況下，才去處理或清空臨時房客邏輯
+if(!isLeavedInThisMonth) {
+    if(room.isTemp && !isPublic) {
+        let hasTempInThisMonth = false;
+        if(room.tempList && room.tempList.length > 0) {
+            hasTempInThisMonth = room.tempList.some(t => t.startDate && isDateInMonth(t.startDate, monthStr));
+        }
+        if(hasTempInThisMonth) {
+            activeName = room.name;
+            isWh = false;
+            res.isTenantCharge = true;
+        } else {
+            activeName = "";
+            res.isTenantCharge = false;
+        }
+    }
+}
 
             // 電表抄表度數區間試算
             if(room.readings && room.readings.length > 0) {
