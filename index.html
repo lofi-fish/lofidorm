@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>宿舍管理系統 (雲端同步與歷史履歷版)</title>
+    <title>宿舍管理系統 (雲端同步與歷史履歷 v38 版)</title>
     <style>
         :root { --main-green: #0f4c2a; --accent-green: #1e7a45; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e0f0e4; margin: 0; padding: 0; color: #0f2a1f; }
@@ -84,7 +84,7 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v37-履歷版) </h1>
+        <h1>🏠 宿舍管理系統 (v38-歷史履歷穩定版) </h1>
         <div style="width:10px;"></div>
     </nav>
 
@@ -277,7 +277,21 @@
             '公共區域': ['公共區域A', '公共區域B']
         };
 
-        // 1. [新增] 歸檔特定房間現有房客至 stayHistory
+        // ====================================================================
+        // v38 核心模組：歷史履歷演算法 (stayHistory) 核心實作
+        // ====================================================================
+
+        /**
+         * 輔助函式：判斷日期是否落在指定月份
+         */
+        function isDateInMonth(dateStr, monthStr) {
+            if (!dateStr) return false;
+            return dateStr.startsWith(monthStr);
+        }
+
+        /**
+         * 歸檔特定房間現有房客至 stayHistory
+         */
         function archiveRoomStay(roomId, optionalLeaveDate = null) {
             const room = rooms[roomId];
             if (!room || !room.name) return false;
@@ -303,16 +317,20 @@
             return true;
         }
 
-        // 2. [新增] 依月份至 stayHistory 查找退宿資料
+        /**
+         * 依月份至 stayHistory 優先查找退宿歷史履歷
+         */
         function findHistoryLeaveInMonth(roomId, monthStr) {
             const room = rooms[roomId];
             if (!room || !room.stayHistory || room.stayHistory.length === 0) return null;
             
-            // 找出退宿日期落在該月份的紀錄
-            return room.stayHistory.find(h => h.leaveDate && h.leaveDate.startsWith(monthStr)) || null;
+            // 優先找出：退宿日期（leaveDate）落在該計費月份的紀錄
+            return room.stayHistory.find(h => isDateInMonth(h.leaveDate, monthStr)) || null;
         }
 
-        // 6. [新增] 舊資料修復遷移機制 (開機自動執行、防重複)
+        /**
+         * 舊資料自動相容與修復遷移機制 (防重複)
+         */
         function migrateLegacyArchiveIfNeeded() {
             let migratedCount = 0;
             Object.keys(rooms).forEach(roomId => {
@@ -320,7 +338,7 @@
                 if (!room) return;
                 if (!room.stayHistory) room.stayHistory = [];
                 
-                // 情境：沒有現有房客，但留有舊系統退宿痕跡，且 stayHistory 裡尚未建立對應紀錄
+                // 若發現舊架構留有退宿痕跡且尚未同步至陣列中，自動幫行政人員補齊履歷
                 if (!room.name && room.leaveDate && room.lastArchivedName) {
                     const alreadyMigrated = room.stayHistory.some(h => 
                         h.name === room.lastArchivedName && h.leaveDate === room.leaveDate
@@ -344,9 +362,13 @@
                 }
             });
             if (migratedCount > 0) {
-                console.log(`[系統遷移] 已成功將 ${migratedCount} 筆舊式退宿封存資料遷移至 stayHistory 架構。`);
+                console.log(`[歷史遷移] v38 已自動將 ${migratedCount} 筆舊式退宿封存資料轉換至 stayHistory 軌跡陣列中。`);
             }
         }
+
+        // ====================================================================
+        // 行政異動與計費業務邏輯整合
+        // ====================================================================
 
         function toggleMenu() {
             document.getElementById('sidebar').classList.toggle('open');
@@ -362,7 +384,9 @@
             return configParams.lockedMonths[selectedReportMonth] === true;
         }
 
-        // 4. 修改自動判定：到期時呼叫 archiveRoomStay() 完整歸檔
+        /**
+         * 到期自動判定：系統時間重置、到期日呼叫 archiveRoomStay() 完整歸檔
+         */
         async function checkAndProcessDateStatus() {
             let needsSave = false;
             Object.keys(rooms).forEach(roomId => {
@@ -384,7 +408,7 @@
                 
                 if (room.leaveDate && room.leaveDate <= TODAY_STR && !room.isTemp) {
                     if (room.name) {
-                        // 執行歷史履歷歸檔
+                        // 執行 v38 歷史履歷陣列歸檔
                         archiveRoomStay(roomId, room.leaveDate);
                         
                         room.lastArchivedName = room.name; 
@@ -450,7 +474,7 @@
             document.getElementById('cfg-suite-fee').value = configParams.suiteFee;
 
             initMissingRooms();
-            migrateLegacyArchiveIfNeeded(); // 啟動自動修復並遷移舊資料至歷史履歷
+            migrateLegacyArchiveIfNeeded(); // 開機自動安全校驗並遷移
             await checkAndProcessDateStatus(); 
             renderRoomList();
             renderRateHistory();
@@ -519,7 +543,9 @@
             });
         }
 
-        // 7. 修改側邊欄：優先從 stayHistory 找回退宿房客大名與狀態標籤
+        /**
+         * 側邊欄渲染：優先從 stayHistory 找回退宿房客大名與狀態標籤
+         */
         function renderRoomList() {
             const list = document.getElementById('room-list');
             if(!list) return;
@@ -538,7 +564,7 @@
                     
                     let displayName = roomId; let tags = ''; let isEmpty = false;
 
-                    // 尋找此月份是否有歷史退宿紀錄
+                    // 1. 優先使用 v38 歷史履歷陣列查找
                     const historyLeave = findHistoryLeaveInMonth(roomId, selectedReportMonth);
 
                     if (roomId.includes("公共區域")) {
@@ -554,12 +580,10 @@
                         displayName = `${roomId} ${nameStr}`;
                         if(room.isBookingFuture) displayName = `${roomId}`;
                     } else if (historyLeave) {
-                        // 優先採用 stayHistory 資料
                         let nameStr = historyLeave.name;
                         if(historyLeave.hasRoommate && historyLeave.roommateName) nameStr += ` + ${historyLeave.roommateName}`;
                         displayName = `${roomId} ${nameStr}`;
-                    } else if (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth)) {
-                        // 次之退回舊邏輯相容
+                    } else if (room.leaveDate && isDateInMonth(room.leaveDate, selectedReportMonth)) {
                         let nameStr = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退客房";
                         displayName = `${roomId} ${nameStr}`;
                     } else {
@@ -573,9 +597,9 @@
                     if (!roomId.includes("公共區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
-                        } else if (room.name || historyLeave || (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth))) {
+                        } else if (room.name || historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, selectedReportMonth))) {
                             
-                            // 判斷當前要顯示的屬性標籤來源
+                            // 判斷要採用的屬性資料來源
                             const targetAuth = historyLeave || room; 
                             
                             if (targetAuth.isWarden) { tags += '<span class="tag tag-warden">舍監</span>'; }
@@ -783,7 +807,9 @@
             showDefaultHome();
         }
 
-        // 3. 修改計費：優先比對 stayHistory，找不到才退回舊邏輯 (相容舊資料)
+        /**
+         * v38 計費模組：優先追溯 stayHistory 履歷陣列，徹底消除覆蓋失蹤 Bug
+         */
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
@@ -791,8 +817,10 @@
             if(!room) return res;
 
             let isPublic = roomId.includes("公共");
+            
+            // A. 優先進行 v38 歷史履歷比對
             let historyLeave = findHistoryLeaveInMonth(roomId, monthStr);
-            let isLeavedInThisMonth = !!historyLeave || (room.leaveDate && room.leaveDate.startsWith(monthStr));
+            let isLeavedInThisMonth = !!historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, monthStr));
             
             let activeName = "";
             let isWh = room.isWarehouse;
@@ -803,19 +831,19 @@
                 res.isTenantCharge = false; 
             } else if (isLeavedInThisMonth) {
                 if (historyLeave) {
-                    // 優先從履歷撈取
                     activeName = historyLeave.name;
                     if (historyLeave.hasRoommate && historyLeave.roommateName) activeName += ` + ${historyLeave.roommateName}`;
                     isWh = historyLeave.isWarehouse;
                     targetAuth = historyLeave;
                 } else {
-                    // 舊相容回退
+                    // 舊資料向後相容
                     activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                     isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
                 }
                 res.note += `[${monthStrFilter(historyLeave ? historyLeave.leaveDate : room.leaveDate)}退宿清算] `;
                 res.isTenantCharge = true; 
             } else if (room.name) {
+                // 如果是未來的預約房客，則當月不計費
                 if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
                     activeName = ""; 
                 } else {
@@ -825,10 +853,11 @@
                 }
             }
 
+            // 臨時入住與當月比對判定
             if(room.isTemp && !isPublic && !isLeavedInThisMonth) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
-                    hasTempInThisMonth = room.tempList.some(t => t.startDate && t.startDate.startsWith(monthStr));
+                    hasTempInThisMonth = room.tempList.some(t => t.startDate && isDateInMonth(t.startDate, monthStr));
                 }
                 if(hasTempInThisMonth) {
                     activeName = room.name;
@@ -840,7 +869,7 @@
                 }
             }
 
-            // 電表區間度數計算
+            // 電表抄表度數區間試算
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -896,7 +925,7 @@
                 res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
 
-            // 遞延款項處理
+            // 遞延款項與跨月未收款鏈接處理
             if (res.isTenantCharge) {
                 let currentDeferKey = `${roomId}_${monthStr}`;
                 if (configParams.deferredPayment && configParams.deferredPayment[currentDeferKey] === true) {
@@ -923,13 +952,15 @@
             return res;
         }
 
-        // 3. 修改原始金額試算：同樣引入履歷優先比對機制
+        /**
+         * 跨月原始金額追溯：同步套用履歷優先權機制
+         */
         function calculateRoomBillRawAmount(roomId, monthStr) {
             const room = rooms[roomId];
             if(!room) return 0;
             
             let historyLeave = findHistoryLeaveInMonth(roomId, monthStr);
-            let isLeavedInThisMonth = !!historyLeave || (room.leaveDate && room.leaveDate.startsWith(monthStr));
+            let isLeavedInThisMonth = !!historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, monthStr));
             
             let isWh = room.isWarehouse;
             let targetAuth = room;
@@ -960,7 +991,7 @@
                     if(currList.length > 0) curr = currList[currList.length - 1].value;
                 }
                 if(prev !== "—" && curr !== "—") {
-                    let deg = Math.max(0, Math.round((deg - prev) * 10) / 10);
+                    let deg = Math.max(0, Math.round((curr - prev) * 10) / 10);
                     eFee = Math.round(deg * ELECTRICITY_RATE);
                 }
             }
@@ -1079,7 +1110,9 @@
             return html;
         }
 
-        // [新增] 用於詳情面板渲染精準的歷史履歷清單
+        /**
+         * 渲染詳細面板中，精準無誤的歷史履歷軌跡紀錄表面
+         */
         function renderStayHistoryLogs(roomId) {
             const room = rooms[roomId];
             if(!room || !room.stayHistory || room.stayHistory.length === 0) return "";
@@ -1089,7 +1122,7 @@
                 if(h.isWarden) tagStr = " [舍監房]";
                 if(h.isSecurityOnly) tagStr = " [保全夜宿]";
                 if(h.isLeaveRetention) tagStr = ` [留停保留:${h.leaveRetentionReason}]`;
-                html += `<li style="margin-bottom:4px;">👤 <b>${h.name}</b>${h.hasRoommate?` (同住:${h.roommateName})`:''}${tagStr} | 區間：${h.checkInDate || '未註明'} ~ ${h.leaveDate}</li>`;
+                html += `<li style="margin-bottom:4px;">👤 <b>${h.name}</b>${h.hasRoommate?` (同住:${h.roommateName})`:''}${tagStr} | 居住區間：${h.checkInDate || '未註明'} ~ ${h.leaveDate}</li>`;
             });
             html += `</ul>`;
             return html;
@@ -1174,7 +1207,9 @@
             box.innerHTML = `📊 留停天數試算：<b>${days}</b> 天，預計預收留停保留費：<b>$${estFee}</b> 元。`;
         }
 
-        // 5. 修改入住申請：新增覆蓋前強制封存與深度清空殘留標籤防污染
+        /**
+         * 新人入住申請：寫入前自動將未歸檔的舊人強制封存入陣列，並深度清洗身分特徵
+         */
         function submitApplyStay() {
             const roomId = document.getElementById('apply-room').value;
             const name = document.getElementById('apply-name').value;
@@ -1185,19 +1220,19 @@
 
             const room = rooms[roomId];
             
-            // 重要防污染：如果發現現有存在舊房客且尚未被系統checkOut自動封存，則立刻手動強制歸檔
+            // 安全防護：若有舊人尚未被 checkOut 流程封存，執行強制截斷與封存
             if(room.name && room.name !== name) {
                 archiveRoomStay(roomId, room.leaveDate || TODAY_STR);
             }
 
-            // 完全覆蓋、深度重置該房的所有狀態與殘留欄位
+            // 完全覆蓋、重置基本核心欄位
             room.name = name;
             room.checkInDate = startDate;
             room.leaveDate = '';
             room.lastArchivedName = '';
             room.lastArchivedIsWarehouse = false;
             
-            // 初始化/清空所有身分開關，防止舊人特徵污染新同仁
+            // 清理身分屬性特徵防止交叉污染
             room.isWarehouse = (type === 'WAREHOUSE');
             room.isWarden = (type === 'WARDEN');
             room.isSecurityOnly = (type === 'SECURITY');
@@ -1212,7 +1247,7 @@
             }
             if(startDate > TODAY_STR) room.isBookingFuture = true;
 
-            alert(`✅ ${roomId} 長期入住申請成功，舊有殘留屬性已安全重置歸檔！`);
+            alert(`✅ ${roomId} 長期入住申請成功，舊有殘留狀態已安全重置歸檔！`);
             closeModal('apply-stay-modal');
             saveToCloud();
         }
@@ -1342,7 +1377,9 @@
             downloadAnchor.click();
             downloadAnchor.remove();
         }
+        
         function triggerImport() { document.getElementById('import-file').click(); }
+        
         function importData(input) {
             const file = input.files[0];
             if (!file) return;
