@@ -48,7 +48,7 @@
         #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 1005; text-align: center; padding-top: 200px; font-size: 18px; font-weight: bold; color: var(--main-green); }
         
         .table-responsive { width: 100%; max-height: 75vh; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; margin-bottom: 30px; border: 1px solid #ddd; border-radius: 4px; }
-        table { width: 100%; border-collapse: collapse; text-align: center; min-width: 650px; }
+        table { width: 100%; border-collapse: collapse; text-align: center; min-width: 800px; }
         
         thead th { position: sticky; top: 0; background-color: var(--main-green); color: white; z-index: 10; padding: 12px 6px; font-size: 14px; border: 1px solid #ddd; }
         td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
@@ -84,8 +84,8 @@
 
     <nav>
         <button class="menu-toggle" onclick="toggleMenu()">☰</button>
-        <h1>🏠 宿舍管理系統 (v35) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
-        <button onclick="loadCloudData()" style="padding: 6px 12px; font-size: 13px; background: #2196F3; margin:0;">🔄 重整刷新</button>
+        <h1>🏠 宿舍管理系統 (v36) - <span style="font-size:15px; font-weight:normal; background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:4px;">系統時間：2026-07-01</span></h1>
+        <div style="width:10px;"></div>
     </nav>
 
     <div class="container">
@@ -130,6 +130,7 @@
         </div>
     </div>
 
+    <!-- Modals -->
     <div id="apply-stay-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
@@ -148,12 +149,10 @@
                 <option value="SECURITY">申請作為保全夜宿房 (管理費免收)</option>
                 <option value="ROOMMATE">申請同住狀態 (維持原費率，有同住者)</option>
             </select>
-
             <div id="apply-roommate-box" style="display:none;">
                 <label>請輸入同住室友姓名：</label>
                 <input type="text" id="apply-roommate-name" placeholder="請輸入共同入住者姓名">
             </div>
-
             <button onclick="submitApplyStay()" style="width:100%; margin-top:15px;">送出申請</button>
         </div>
     </div>
@@ -171,10 +170,8 @@
             </label>
             <label>住宿大名：</label>
             <input type="text" id="temp-name" placeholder="請輸入實際住宿者姓名">
-            
             <label>入住人數：</label>
-            <input type="number" id="temp-count" value="1" min="1" placeholder="請輸入入住總人數">
-            
+            <input type="number" id="temp-count" value="1" min="1">
             <label>預計入住日期：</label>
             <input type="date" id="temp-start-date" value="2026-07-01">
             <label>預計退房日期：</label>
@@ -199,7 +196,6 @@
             <h2>✨ 房客狀態特殊需求申請</h2>
             <label>選擇已入房間：</label>
             <select id="sr-room"></select>
-            
             <label>變更特殊需求：</label>
             <select id="sr-type" onchange="toggleSpecialRequestFields()">
                 <option value="NORMAL">還原常規住宿狀態</option>
@@ -209,12 +205,10 @@
                 <option value="ROOMMATE">申請同住 (維持原費率，新增室友)</option>
                 <option value="LEAVE_RETENTION">房間保留 (改倉庫計費，因留職停薪)</option>
             </select>
-
             <div id="sr-roommate-box" style="display:none;">
                 <label>請輸入室友姓名：</label>
                 <input type="text" id="sr-roommate-name" placeholder="請輸入室友大名">
             </div>
-
             <div id="sr-leave-box" style="display:none;">
                 <label>請選擇留職停薪原因：</label>
                 <select id="sr-leave-reason">
@@ -225,11 +219,8 @@
                 <input type="date" id="sr-leave-start" value="2026-07-01" onchange="calculateRetentionFeePreview()">
                 <label>留停預估結束日期：</label>
                 <input type="date" id="sr-leave-end" value="2026-08-01">
-                <div class="calc-preview" id="retention-calc-box">
-                    💡 請輸入正確的起迄日期進行預收費用試算。
-                </div>
+                <div class="calc-preview" id="retention-calc-box">💡 請輸入正確的起迄日期試算。</div>
             </div>
-
             <button onclick="submitSpecialRequest()" style="width:100%; margin-top:15px; background-color: #7e57c2;">確認變更狀態</button>
         </div>
     </div>
@@ -254,6 +245,7 @@
         let rooms = {}; 
         let configParams = { mgmtFee: 1600, whFee: 500, suiteFee: 2400, historyLogs: [], deferredPayment: {}, lockedMonths: {} };
         let selectedReportMonth = "2026-06"; 
+        let currentActiveView = "home"; 
 
         const DEFAULT_ROOMS_DATA = {
             "1-1": {name: "簡鴻存", isWarehouse: false, readings: [{date: "2026-05-04", value: 3732.2}], leaveDate: "", checkInDate: "2026-05-01"},
@@ -284,8 +276,6 @@
             '第五排': ['5-1'],
             '公共區域': ['公共區域A', '公共區域B']
         };
-
-        let currentActiveView = "home"; 
 
         function toggleMenu() {
             document.getElementById('sidebar').classList.toggle('open');
@@ -358,30 +348,32 @@
             } catch (error) {
                 console.error("Cloud data loading issue:", error);
                 rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
-            } finally {
-                if(!configParams) configParams = {};
-                if(!configParams.historyLogs) configParams.historyLogs = [];
-                if(!configParams.deferredPayment) configParams.deferredPayment = {};
-                if(!configParams.lockedMonths) configParams.lockedMonths = {};
-                if(!configParams.mgmtFee) configParams.mgmtFee = 1600;
-                if(!configParams.whFee) configParams.whFee = 500;
-                if(!configParams.suiteFee) configParams.suiteFee = 2400;
+            } declareDataFields();
+        }
 
-                document.getElementById('cfg-mgmt-fee').value = configParams.mgmtFee;
-                document.getElementById('cfg-wh-fee').value = configParams.whFee;
-                document.getElementById('cfg-suite-fee').value = configParams.suiteFee;
+        function declareDataFields() {
+            if(!configParams) configParams = {};
+            if(!configParams.historyLogs) configParams.historyLogs = [];
+            if(!configParams.deferredPayment) configParams.deferredPayment = {};
+            if(!configParams.lockedMonths) configParams.lockedMonths = {};
+            if(!configParams.mgmtFee) configParams.mgmtFee = 1600;
+            if(!configParams.whFee) configParams.whFee = 500;
+            if(!configParams.suiteFee) configParams.suiteFee = 2400;
 
-                initMissingRooms();
-                checkAndProcessDateStatus(); 
-                renderRoomList();
-                renderRateHistory();
-                
-                if(currentActiveView === "home") showDefaultHome();
-                else if(currentActiveView === "temp_list") showTempStayList();
-                else switchRoom(currentActiveView);
-                
-                showLoading(false);
-            }
+            document.getElementById('cfg-mgmt-fee').value = configParams.mgmtFee;
+            document.getElementById('cfg-wh-fee').value = configParams.whFee;
+            document.getElementById('cfg-suite-fee').value = configParams.suiteFee;
+
+            initMissingRooms();
+            checkAndProcessDateStatus(); 
+            renderRoomList();
+            renderRateHistory();
+            
+            if(currentActiveView === "home") showDefaultHome();
+            else if(currentActiveView === "temp_list") showTempStayList();
+            else switchRoom(currentActiveView);
+            
+            showLoading(false);
         }
 
         async function saveToCloud() {
@@ -412,7 +404,6 @@
             const effDate = document.getElementById('cfg-effective-date').value;
 
             const logStr = `${effDate} 起: 一般 ${configParams.mgmtFee} | 倉庫 ${configParams.whFee} | 套房 ${configParams.suiteFee}`;
-            if(!configParams.historyLogs) configParams.historyLogs = [];
             configParams.historyLogs.unshift(logStr);
 
             alert(`✅ 費率參數更新成功！`);
@@ -471,7 +462,7 @@
                         if(room.hasRoommate && room.roommateName) nameStr += ` + ${room.roommateName}`;
                         displayName = `${roomId} ${nameStr}`;
                         if(room.isBookingFuture) displayName = `${roomId}`;
-                    } else if (!room.name && room.leaveDate && room.leaveDate.startsWith(selectedReportMonth)) {
+                    } else if (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth)) {
                         let nameStr = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退客房";
                         displayName = `${roomId} ${nameStr}`;
                     } else {
@@ -485,7 +476,7 @@
                     if (!roomId.includes("公共區域")) {
                         if (room.name && room.isBookingFuture) {
                             tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
-                        } else if (room.name || (!room.name && room.leaveDate && room.leaveDate.startsWith(selectedReportMonth))) {
+                        } else if (room.name || (room.leaveDate && room.leaveDate.startsWith(selectedReportMonth))) {
                             if (room.isWarden) { tags += '<span class="tag tag-warden">舍監</span>'; }
                             if (room.isLeaveRetention) { tags += `<span class="tag tag-leave-status">⏳ 留停房</span>`; }
                             if (room.isSecurityOnly) { tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>'; }
@@ -581,19 +572,19 @@
                                 <th>電費金額</th>
                                 <th>月管理費</th>
                                 <th>應收總計</th>
+                                <th>延至下期</th>
                                 <th>備註說明</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
 
-            // 拆分加總：房客部分 與 公司吸收(公共區域/空房)部分
             let residentElec = 0, residentMgmt = 0, residentTotal = 0;
             let companyElec = 0; 
             let groupIdx = 0;
 
             Object.keys(ALL_FLOORS).forEach(floorName => {
-                html += `<tr class="floor-row-header"><td colspan="9">${floorName}</td></tr>`;
+                html += `<tr class="floor-row-header"><td colspan="10">${floorName}</td></tr>`;
                 
                 ALL_FLOORS[floorName].forEach(roomId => {
                     const room = rooms[roomId];
@@ -602,7 +593,6 @@
                     let rowClass = `floor-group-${groupIdx % 6}`;
                     let calc = calculateRoomBill(roomId, selectedReportMonth);
 
-                    // 判斷該帳目算在「房客收費」還是「公司自行吸收(空房/公共用電)」
                     if (calc.isTenantCharge) {
                         residentElec += calc.elecFee;
                         residentMgmt += calc.mgmtFee;
@@ -610,6 +600,11 @@
                     } else {
                         companyElec += calc.elecFee;
                     }
+
+                    // 建立跨月遞延的 Checkbox 控制鍵
+                    let deferKey = `${roomId}_${selectedReportMonth}`;
+                    let isDeferred = (configParams.deferredPayment && configParams.deferredPayment[deferKey] === true);
+                    let checkboxStr = calc.isTenantCharge ? `<input type="checkbox" onchange="toggleDeferPayment('${roomId}', '${selectedReportMonth}', this.checked)" ${isDeferred ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>` : '—';
 
                     html += `
                         <tr class="${rowClass}">
@@ -621,6 +616,7 @@
                             <td>$${calc.elecFee}</td>
                             <td>$${calc.mgmtFee}</td>
                             <td style="color:${calc.isTenantCharge ? '#b22222' : '#666'}; font-weight:bold;">$${calc.total}</td>
+                            <td>${checkboxStr}</td>
                             <td style="text-align:left; font-size:12px; max-width:180px; color:#c62828;">${calc.note}</td>
                         </tr>
                     `;
@@ -635,21 +631,21 @@
                                 <td colspan="5" style="text-align:right; color:#b22222;">👤 房客應收部分小計：</td>
                                 <td style="color:#b22222;">$${residentElec}</td>
                                 <td style="color:#b22222;">$${residentMgmt}</td>
-                                <td style="color:#b22222; font-size:15px;">$${residentTotal}</td>
+                                <td style="color:#b22222; font-size:15px;" colspan="2">$${residentTotal}</td>
                                 <td style="text-align:left; font-size:12px; color:#666;">向住宿同仁與倉庫計收之款項</td>
                             </tr>
                             <tr style="background:#f1f3f5; font-weight:bold; color:#495057;">
                                 <td colspan="5" style="text-align:right;">🏢 公共區域 / 空房自用電費小計：</td>
                                 <td>$${companyElec}</td>
                                 <td>$0</td>
-                                <td>$${companyElec}</td>
+                                <td colspan="2">$${companyElec}</td>
                                 <td style="text-align:left; font-size:12px; color:#666;">公司負擔吸收之內部公用及空置房電費</td>
                             </tr>
                             <tr style="background:#e2ede4; font-weight:bold; border-top:2px solid #0f4c2a; font-size:15px;">
                                 <td colspan="5" style="text-align:right; color:#0f4c2a;">📊 全廠電表與管理費總開銷 (大計)：</td>
                                 <td style="color:#0f4c2a;">$${residentElec + companyElec}</td>
                                 <td style="color:#0f4c2a;">$${residentMgmt}</td>
-                                <td style="color:#d9534f; font-size:18px;">$${finalGrandTotal}</td>
+                                <td style="color:#d9534f; font-size:18px;" colspan="2">$${finalGrandTotal}</td>
                                 <td style="text-align:left; font-size:12px; color:#0f4c2a;">(房客應收 $${residentTotal} + 公司吸收 $${companyElec})</td>
                             </tr>
                         </tbody>
@@ -658,6 +654,14 @@
             `;
             displayArea.innerHTML = html;
             document.getElementById('report-month-select').value = selectedReportMonth;
+        }
+
+        // 當使用者在清冊點選「延至下期」時觸發
+        async function toggleDeferPayment(roomId, monthStr, isChecked) {
+            if(!configParams.deferredPayment) configParams.deferredPayment = {};
+            let deferKey = `${roomId}_${monthStr}`;
+            configParams.deferredPayment[deferKey] = isChecked;
+            await saveToCloud();
         }
 
         function generateMonthOptions() {
@@ -675,7 +679,7 @@
             showDefaultHome();
         }
 
-        // v35 核心計費重構：完整納入公共區域、空房電費、並正確歸類收費對象
+        // 核心計費機制：修復退宿覆蓋問題、串接跨月收費遞延機制
         function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
             let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
@@ -687,27 +691,27 @@
             let activeName = "";
             let isWh = room.isWarehouse;
 
+            // 1. 核心大名與計費主體判定
             if (isPublic) {
                 res.nameDisplay = "公共分攤區域";
-                res.isTenantCharge = false; // 由公司自行吸收，不計入房客應收
+                res.isTenantCharge = false; 
             } else if (isLeavedInThisMonth) {
-                // 第一優先級：本月退宿人員，強制鎖定其大名與費用身分
+                // 退宿人員擁有最高優先級顯示權，防止被過濾為空房
                 activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                 isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
                 res.note += `[${monthStrFilter(room.leaveDate)}退宿清算] `;
-                res.isTenantCharge = true; // 退宿人員的費用仍需列入房客收費清冊
+                res.isTenantCharge = true; 
             } else if (room.name) {
-                // 第二優先級：常規常駐判定
                 if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
-                    activeName = ""; // 未來的預約，在這個月視同空房
+                    activeName = ""; // 未來預約在當月仍視為空房
                 } else {
                     activeName = room.name;
-                    res.isTenantCharge = true; // 有人住的正常計費
+                    res.isTenantCharge = true; 
                 }
             }
 
-            // 臨時入住彈性判定
-            if(room.isTemp && !isPublic) {
+            // 臨時入住判定
+            if(room.isTemp && !isPublic && !isLeavedInThisMonth) {
                 let hasTempInThisMonth = false;
                 if(room.tempList && room.tempList.length > 0) {
                     hasTempInThisMonth = room.tempList.some(t => t.startDate && t.startDate.startsWith(monthStr));
@@ -716,13 +720,13 @@
                     activeName = room.name;
                     isWh = false;
                     res.isTenantCharge = true;
-                } else if (!isLeavedInThisMonth) {
+                } else {
                     activeName = "";
                     res.isTenantCharge = false;
                 }
             }
 
-            // 抄表度數區間定位計算
+            // 2. 抄表用電區間定位
             if(room.readings && room.readings.length > 0) {
                 let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
                 
@@ -756,7 +760,7 @@
                 }
             }
 
-            // 特殊行政限制管制房排除管理費
+            // 3. 特殊房管控
             if(room.isSpecialLock) { 
                 res.nameDisplay = room.name || "備品室"; 
                 res.isTenantCharge = false;
@@ -764,28 +768,84 @@
                 return res; 
             }
 
-            // 最終金額加總與身分修飾
+            // 4. 計算常規基本費用
             if(activeName) {
                 res.nameDisplay = activeName;
                 res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
                 
-                if(room.isWarden || room.isSecurityOnly) res.mgmtFee = 0;
-                if(room.isTemp) res.mgmtFee = 0;
-
+                if(room.isWarden || room.isSecurityOnly || room.isTemp) res.mgmtFee = 0;
                 res.total = res.elecFee + res.mgmtFee;
             } else if (room.isDriverOnly) {
-                res.nameDisplay = "司領房";
-                res.isTenantCharge = false;
-                res.total = res.elecFee;
+                res.nameDisplay = "司領房"; res.isTenantCharge = false; res.total = res.elecFee;
             } else if (isPublic) {
-                res.total = res.elecFee; // 公共區域只有電費
+                res.total = res.elecFee;
             } else {
-                // 純空房狀態（有零星抄表用電也會被算進去）
                 res.total = res.elecFee;
                 res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
             }
 
+            // 5. 跨月收費遞延（未收延至下期）進階處理邏輯
+            if (res.isTenantCharge) {
+                // (A) 檢查本月這筆費用是否被設定為「遞延至下期收」
+                let currentDeferKey = `${roomId}_${monthStr}`;
+                if (configParams.deferredPayment && configParams.deferredPayment[currentDeferKey] === true) {
+                    res.note += `[⚠️ 本期遞延至下期收費] `;
+                    res.total = 0; // 當月應收總計歸零
+                }
+
+                // (B) 檢查上個月是否有遞延過來的未收款需要在此時併入
+                let parts = monthStr.split('-');
+                let year = parseInt(parts[0]);
+                let prevMonthNum = parseInt(parts[1]) - 1;
+                if(prevMonthNum === 0) { prevMonthNum = 12; year -= 1; }
+                let prevMonthStr = `${year}-${prevMonthNum < 10 ? '0' + prevMonthNum : prevMonthNum}`;
+                
+                let prevDeferKey = `${roomId}_${prevMonthStr}`;
+                if (configParams.deferredPayment && configParams.deferredPayment[prevDeferKey] === true) {
+                    // 重新算一次上個月本來應該收多少錢
+                    let prevCalc = calculateRoomBillRawAmount(roomId, prevMonthStr);
+                    if (prevCalc > 0) {
+                        res.total += prevCalc;
+                        res.note += `[串接上月遞延未收款: $${prevCalc}] `;
+                    }
+                }
+            }
+
             return res;
+        }
+
+        // 輔助函式：用來單純計算某個房間在某月份的原始帳款（不受本身遞延狀態歸零影響），提供遞延加總使用
+        function calculateRoomBillRawAmount(roomId, monthStr) {
+            const room = rooms[roomId];
+            if(!room) return 0;
+            let isLeavedInThisMonth = (room.leaveDate && room.leaveDate.startsWith(monthStr));
+            let activeName = isLeavedInThisMonth ? (room.lastArchivedName || room.name) : room.name;
+            let isWh = isLeavedInThisMonth ? (room.lastArchivedIsWarehouse || room.isWarehouse) : room.isWarehouse;
+
+            let eFee = 0;
+            if(room.readings && room.readings.length > 0) {
+                let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
+                let prev = "—", curr = "—";
+                if (monthStr === "2026-06") {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
+                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
+                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) curr = currList[currList.length - 1].value;
+                    else if (isLeavedInThisMonth && sorted.length > 0) curr = sorted[sorted.length - 1].value;
+                } else {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
+                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
+                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
+                    if(currList.length > 0) curr = currList[currList.length - 1].value;
+                }
+                if(prev !== "—" && curr !== "—") {
+                    let deg = Math.max(0, Math.round((curr - prev) * 10) / 10);
+                    eFee = Math.round(deg * ELECTRICITY_RATE);
+                }
+            }
+            let mFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
+            if(room.isWarden || room.isSecurityOnly || room.isTemp || room.isSpecialLock) mFee = 0;
+            return eFee + mFee;
         }
 
         function switchRoom(roomId) {
@@ -800,10 +860,7 @@
             let isLocked = isCurrentMonthLocked();
             let disabledStr = isLocked ? "disabled" : "";
 
-            if(room.readings) {
-                room.readings.sort((a, b) => new Date(b.date) - new Date(a.date));
-            }
-
+            if(room.readings) { room.readings.sort((a, b) => new Date(b.date) - new Date(a.date)); }
             let isPublicArea = roomId.includes("公共區域");
 
             let specialNoteText = "常規一般住宿";
@@ -971,12 +1028,12 @@
             const end = document.getElementById('sr-leave-end').value;
             const box = document.getElementById('retention-calc-box');
             if(!start || !end || end < start) {
-                box.innerHTML = "💡 請輸入正確的起迄日期進行預收費用試算。";
+                box.innerHTML = "💡 請輸入正確的起迄日期試算。";
                 return;
             }
             let days = Math.round((new Date(end) - new Date(start)) / (1000*60*60*24));
             let estFee = Math.ceil((days / 30) * configParams.whFee);
-            box.innerHTML = `📊 留停天數試算：<b>${days}</b> 天，預計預收留停保留費(按倉庫標準)：<b style="font-size:16px;">$${estFee}</b> 元。`;
+            box.innerHTML = `📊 留停天數試算：<b>${days}</b> 天，預計預收留停保留費：<b>$${estFee}</b> 元。`;
         }
 
         function submitApplyStay() {
@@ -1076,18 +1133,13 @@
             if(type === 'ROOMMATE') {
                 room.hasRoommate = true;
                 room.roommateName = document.getElementById('sr-roommate-name').value;
-            } else {
-                room.hasRoommate = false;
-            }
+            } else { room.hasRoommate = false; }
 
             if(type === 'LEAVE_RETENTION') {
-                room.isLeaveRetention = true;
-                room.isWarehouse = true;
+                room.isLeaveRetention = true; room.isWarehouse = true;
                 room.leaveRetentionReason = document.getElementById('sr-leave-reason').value;
                 room.leaveDate = document.getElementById('sr-leave-end').value;
-            } else {
-                room.isLeaveRetention = false;
-            }
+            } else { room.isLeaveRetention = false; }
 
             alert(`✅ 房間 ${roomId} 特殊狀態已成功更新！`);
             closeModal('special-request-modal');
@@ -1148,8 +1200,8 @@
                         if(imported.SYSTEM_CONFIG) configParams = imported.SYSTEM_CONFIG;
                         alert("✅ 系統備份還原成功！正在上傳同步...");
                         await saveToCloud();
-                    } else { alert("❌ 格式不符，非系統有效備份檔"); }
-                } catch(err) { alert("❌ 解析 JSON 失敗"); }
+                    } else { alert("❌ 格式不符"); }
+                } catch(err) { alert("❌ 解析失敗"); }
             };
             reader.readAsText(file);
         }
