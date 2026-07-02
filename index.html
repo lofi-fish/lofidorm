@@ -955,52 +955,127 @@ if(!isLeavedInThisMonth) {
         }
 
         /**
-         * 跨月原始金額追溯：同步套用履歷優先權機制
+         * v38 計費模組：優先追溯 stayHistory 履歷陣列，徹底消除覆蓋失蹤 Bug
          */
-        function calculateRoomBillRawAmount(roomId, monthStr) {
+        function calculateRoomBill(roomId, monthStr) {
             const room = rooms[roomId];
-            if(!room) return 0;
+            let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
             
+            if(!room) return res;
+
+            let isPublic = roomId.includes("公共");
+            
+            // A. 優先進行 v38 歷史履歷比對
             let historyLeave = findHistoryLeaveInMonth(roomId, monthStr);
             let isLeavedInThisMonth = !!historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, monthStr));
             
+            let activeName = "";
             let isWh = room.isWarehouse;
             let targetAuth = room;
 
-            if (isLeavedInThisMonth) {
+            // ---- 🔀 重新梳理身分判定權限，絕對互斥，避免洗掉 ----
+            if (isPublic) {
+                res.nameDisplay = "公共分攤區域";
+                res.isTenantCharge = false; 
+            } else if (isLeavedInThisMonth) {
+                // 【情境 1：當月退宿】最高優先權
                 if (historyLeave) {
+                    activeName = historyLeave.name;
+                    if (historyLeave.hasRoommate && historyLeave.roommateName) activeName += ` + ${historyLeave.roommateName}`;
                     isWh = historyLeave.isWarehouse;
                     targetAuth = historyLeave;
                 } else {
+                    activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
                     isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
+                }
+                res.note += `[${monthStrFilter(historyLeave ? historyLeave.leaveDate : room.leaveDate)}退宿清算] `;
+                res.isTenantCharge = true; 
+            } else if (room.isTemp) {
+                // 【情境 2：臨時房客】次要優先權
+                let hasTempInThisMonth = false;
+                if(room.tempList && room.tempList.length > 0) {
+                    hasTempInThisMonth = room.tempList.some(t => t.startDate && isDateInMonth(t.startDate, monthStr));
+                }
+                if(hasTempInThisMonth) {
+                    activeName = room.name;
+                    isWh = false;
+                    res.isTenantCharge = true;
+                } else {
+                    activeName = "";
+                    res.isTenantCharge = false;
+                }
+            } else if (room.name) {
+                // 【情境 3：常規長期房客】
+                if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
+                    activeName = ""; // 未來預約，當月不計費
+                    res.isTenantCharge = false;
+                } else {
+                    activeName = room.name;
+                    if(room.hasRoommate && room.roommateName) activeName += ` + ${room.roommateName}`;
+                    res.isTenantCharge = true; 
+                }
+            } else {
+                // 【情境 4：真正空房】
+                activeName = "";
+                res.isTenantCharge = false;
+            }
+
+            // ---- ⚡ 電表抄表度數區間試算 ----
+            if(room.readings && room.readings.length > 0) {
+                let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                if (monthStr === "2026-06") {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) {
+                        res.curr = currList[currList.length - 1].value;
+                    } else if (isLeavedInThisMonth && sorted.length > 0) {
+                        res.curr = sorted[sorted.length - 1].value; 
+                    }
+                } else if (monthStr === "2026-07") {
+                    let prevList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => r.date.startsWith("2026-07") && new Date(r.date) > new Date("2026-07-05T23:59:59"));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+                } else {
+                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
+                    if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
+                    if(currList.length > 0) res.curr = currList[currList.length - 1].value;
+                }
+
+                if(res.prev !== "—" && res.curr !== "—") {
+                    res.degree = Math.max(0, Math.round((res.curr - res.prev) * 10) / 10);
+                    res.elecFee = Math.round(res.degree * ELECTRICITY_RATE);
                 }
             }
 
-            let eFee = 0;
-            if(room.readings && room.readings.length > 0) {
-                let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
-                let prev = "—", curr = "—";
-                if (monthStr === "2026-06") {
-                    let prevList = sorted.filter(r => new Date(r.date) < new Date("2026-06-01"));
-                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
-                    let currList = sorted.filter(r => new Date(r.date) >= new Date("2026-06-01") && new Date(r.date) <= new Date("2026-07-05T23:59:59"));
-                    if(currList.length > 0) curr = currList[currList.length - 1].value;
-                    else if (isLeavedInThisMonth && sorted.length > 0) curr = sorted[sorted.length - 1].value;
-                } else {
-                    let prevList = sorted.filter(r => new Date(r.date) < new Date(`${monthStr}-01`));
-                    if(prevList.length > 0) prev = prevList[prevList.length - 1].value;
-                    let currList = sorted.filter(r => r.date.startsWith(monthStr));
-                    if(currList.length > 0) curr = currList[currList.length - 1].value;
-                }
-                if(prev !== "—" && curr !== "—") {
-                    let deg = Math.max(0, Math.round((curr - prev) * 10) / 10);
-                    eFee = Math.round(deg * ELECTRICITY_RATE);
-                }
+            if(room.isSpecialLock) { 
+                res.nameDisplay = room.name || "備品室"; 
+                res.isTenantCharge = false;
+                res.total = res.elecFee;
+                return res; 
             }
-            let mFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
-            if(targetAuth.isWarden || targetAuth.isSecurityOnly || room.isTemp || room.isSpecialLock) mFee = 0;
-            return eFee + mFee;
-        }
+
+            // ---- 💰 費用計算主體 ----
+            if(activeName) {
+                res.nameDisplay = activeName;
+                res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
+                
+                if(targetAuth.isWarden || targetAuth.isSecurityOnly || room.isTemp) res.mgmtFee = 0;
+                res.total = res.elecFee + res.mgmtFee;
+            } else if (room.isDriverOnly) {
+                res.nameDisplay = "司領房"; res.isTenantCharge = false; res.total = res.elecFee;
+            } else if (isPublic) {
+                res.total = res.elecFee;
+            } else {
+                res.total = res.elecFee;
+                res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
+            }
 
         function switchRoom(roomId) {
             currentActiveView = roomId;
