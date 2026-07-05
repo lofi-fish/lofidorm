@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿舍管理系統 (雲端同步版)</title>
+    <style>
+        :root { --main-green: #0f4c2a; --accent-green: #1e7a45; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e0f0e4; margin: 0; padding: 0; color: #0f2a1f; }
+        
+        nav { background: linear-gradient(135deg, var(--main-green), var(--accent-green)); color: white; padding: 15px; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 101; }
+        nav h1 { margin: 0; font-size: 20px; cursor: pointer; }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0 10px; margin: 0; }
+
+        .container { max-width: 1200px; margin: 0 auto; background: white; min-height: 100vh; display: flex; position: relative; }
+        
+        .sidebar { width: 320px; background: #e6f0ea; padding: 15px; border-right: 1px solid #b0d4b8; box-sizing: border-box; transition: transform 0.3s ease; z-index: 100; }
+        .content { flex: 1; padding: 20px; min-width: 300px; position: relative; box-sizing: border-box; }
+        
+        .floor-header { padding: 12px 15px; background: var(--main-green); color: white; font-weight: bold; margin: 8px 0 4px; border-radius: 8px; cursor: pointer; }
+        .floor-content { display: block; }
+        
+        .room-item { padding: 12px 15px; margin: 4px 0; background: white; border-radius: 8px; cursor: pointer; border: 1px solid #ddd; font-size: 15px; }
+        .room-item.empty-room { background: #f2f2f2; color: #777; }
+        .room-item:hover, .room-item.active { background: #b0d4b8 !important; color: #0f2a1f !important; }
+        
+        .tag { font-size: 11px; padding: 2px 6px; border-radius: 12px; margin-left: 5px; color: white; display: inline-block; font-weight: normal; vertical-align: middle; }
+        .tag-warehouse { background: #ff9800; }
+        .tag-leave { background: #666666; }
+        .tag-temp { background: #2196F3; }
+        .tag-special { background: #7e57c2; }
+        .tag-booking { background: #e91e63; }
+        .tag-leave-status { background: #e65100; }
+        .tag-warden { background: #009688; }
+        
+        button { padding: 12px 16px; border: none; border-radius: 6px; background: var(--accent-green); color: white; cursor: pointer; margin: 5px 2px; font-size: 15px; }
+        button:hover { background: #0f4c2a; }
+        .btn-danger { background-color: #d9534f; }
+        .btn-danger:hover { background-color: #c9302c; }
+        .sidebar button { width: 100%; margin: 5px 0; box-sizing: border-box; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1002; }
+        .modal-content { background: white; margin: 5% auto; padding: 25px; width: 90%; max-width: 480px; border-radius: 12px; position: relative; box-sizing: border-box; max-height: 85vh; overflow-y: auto; }
+        .close { position: absolute; top: 10px; right: 20px; font-size: 32px; cursor: pointer; }
+        input, select, textarea { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin: 6px 0 12px 0; box-sizing: border-box; font-size: 15px; width: 100%; }
+        
+        #meter-section { background: #f4fdf7; padding: 15px; border-radius: 8px; border: 1px solid #b0d4b8; margin-bottom: 20px; }
+        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 1005; text-align: center; padding-top: 200px; font-size: 18px; font-weight: bold; color: var(--main-green); }
+        
+        .table-responsive { width: 100%; max-height: 75vh; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; margin-bottom: 30px; border: 1px solid #ddd; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; text-align: center; min-width: 800px; }
+        
+        thead th { position: sticky; top: 0; background-color: var(--main-green); color: white; z-index: 10; padding: 12px 6px; font-size: 14px; border: 1px solid #ddd; }
+        td { padding: 10px 6px; font-size: 14px; border: 1px solid #ddd; }
+        
+        .floor-group-0 { background-color: #ffffff; }
+        .floor-group-1 { background-color: #f7faf8; }
+        .floor-group-2 { background-color: #edf5ef; }
+        .floor-group-3 { background-color: #e3efe6; }
+        .floor-group-4 { background-color: #d8eada; }
+        .floor-group-5 { background-color: #fcfcfc; }
+        .floor-row-header { font-weight: bold; background-color: #e2ede4 !important; border-top: 2px solid var(--main-green); text-align: left; padding-left: 12px; }
+        .floor-row-header td { position: sticky; z-index: 5; }
+
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 99; }
+
+        .bill-summary-box { background: #fffde6; padding: 20px; border-radius: 8px; border: 1px solid #e6db55; margin-top: 10px; }
+        .setting-panel { background: #f0f4f1; padding: 12px; border-radius: 8px; border: 1px solid #cbdcd0; margin-top: 15px; font-size: 14px; }
+        .setting-panel input { padding: 6px; margin: 4px 0 8px 0; font-size: 13px; }
+        
+        .history-log-box { font-size: 12px; max-height: 100px; overflow-y: auto; background: white; padding: 6px; border: 1px solid #ccc; margin-top: 8px; border-radius: 4px; text-align: left; }
+        .calc-preview { font-size: 13px; background: #fff3e0; padding: 10px; border-radius: 6px; border: 1px solid #ffe0b2; margin: 10px 0; color: #e65100; }
+
+        @media (max-width: 768px) {
+            .menu-toggle { display: block; }
+            .sidebar { position: fixed; top: 58px; left: 0; height: calc(100vh - 58px); transform: translateX(-100%); overflow-y: auto; box-shadow: 4px 0 10px rgba(0,0,0,0.1); background: #f4fbf7; }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.open { display: block; }
+            .content { padding: 15px; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+        <h1>🏠 宿舍管理系統 (v38.7-已修正退宿人員費用未計算問題) </h1>
+        <div style="width:10px;"></div>
+    </nav>
+
+    <div id="cloud-sync-warning" style="display:none; background:#c62828; color:#fff; text-align:center; padding:10px 14px; font-weight:bold; line-height:1.6;">
+        ⚠️ 雲端資料同步失敗！目前顯示的是系統內建的備用資料，<u>並非 Google 試算表中最新的真實資料</u>，電表度數／管理費／退宿紀錄都可能是過期或不正確的，請勿依此對外收費！請檢查網路連線後重新整理頁面。
+    </div>
+
+    <div class="container">
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMenu()"></div>
+
+        <div class="sidebar" id="sidebar">
+            <button onclick="showDefaultHome()" style="background: #2a6e45; font-weight:bold; padding: 12px; font-size: 15px; margin-bottom: 12px; border: 1px solid #fff;">📊 顯示總體財務清冊</button>
+            <hr style="margin-top:0;">
+            
+            <h3>宿舍入住管理</h3>
+            <button onclick="showApplyStayModal()">長期入住申請</button>
+            <button onclick="showTempStayModal()" style="background-color: #2196F3;">臨時入住申請</button>
+            <button onclick="showTempStayList()" style="background-color: #01579b; font-size: 14px; padding: 8px 12px;">📋 檢視臨時入住預約清單</button>
+            <button onclick="showSpecialRequestModal()" style="background-color: #7e57c2;">✨ 特殊需求申請</button>
+            <button onclick="showApplyLeaveModal()">申請退宿清除</button>
+            <button onclick="showBackfillHistoryModal()" style="background-color: #ad1457;">🛠 手動補登退宿歷史（房間目前已空但缺紀錄）</button>
+            <hr>
+            
+            <h3>房間列表</h3>
+            <div id="room-list"></div>
+            <hr>
+            
+            <div class="setting-panel">
+                <b style="color: var(--main-green);">⚙️ 費率變更與實施設定</b>
+                <label style="display:block; margin-top:6px;">一般月管理費：<input type="number" id="cfg-mgmt-fee" value="1600"></label>
+                <label style="display:block;">倉庫月管理費：<input type="number" id="cfg-wh-fee" value="500"></label>
+                <label style="display:block;">5-1套房管理費：<input type="number" id="cfg-suite-fee" value="2400"></label>
+                <label style="display:block;">實施公告日期：<input type="date" id="cfg-effective-date" value="2026-07-01"></label>
+                <button onclick="saveConfigParams()" style="width:100%; padding:6px; font-size:13px; background:#4caf50; margin-top:4px;">套用並記錄新費率</button>
+                
+                <div style="margin-top:10px; font-weight:bold; color:#555;">📋 費率變更歷史：</div>
+                <div class="history-log-box" id="rate-history-log">暫無歷史變更紀錄</div>
+            </div>
+            
+            <button onclick="exportData()" style="background-color: #666; font-size: 12px; padding: 6px;">📤 匯出系統備份</button>
+            <button onclick="triggerImport()" style="background-color: #666; font-size: 12px; padding: 6px;">📥 匯入系統備份</button>
+            <button onclick="showRawCloudDebug()" style="background-color: #b26a00; font-size: 12px; padding: 6px;">🔍 檢視雲端原始資料（除錯）</button>
+            <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+        </div>
+
+        <div class="content">
+            <div id="loading-overlay">⏳ 雲端資料同步中...</div>
+            <div id="main-display-area"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="apply-stay-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('apply-stay-modal')">×</span>
+            <h2>長期入住申請</h2>
+            <label>選擇房間：</label>
+            <select id="apply-room"></select>
+            <input type="text" id="apply-name" placeholder="入住姓名">
+            <label>入住開始日期：</label>
+            <input type="date" id="apply-start-date" value="2026-07-01">
+            
+            <label>房客特定身分 / 特殊需求：</label>
+            <select id="apply-special-type" onchange="toggleApplySpecialFields()">
+                <option value="NORMAL">常規常駐狀態 (依房型收費)</option>
+                <option value="WAREHOUSE">申請作為倉庫 (改按倉庫費計收)</option>
+                <option value="WARDEN">申請作為舍監房 (管理費免收)</option>
+                <option value="SECURITY">申請作為保全夜宿房 (管理費免收)</option>
+                <option value="ROOMMATE">申請同住狀態 (維持原費率，有同住者)</option>
+            </select>
+            <div id="apply-roommate-box" style="display:none;">
+                <label>請輸入同住室友姓名：</label>
+                <input type="text" id="apply-roommate-name" placeholder="請輸入共同入住者姓名">
+            </div>
+            <button onclick="submitApplyStay()" style="width:100%; margin-top:15px;">送出申請</button>
+        </div>
+    </div>
+
+    <div id="temp-stay-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('temp-stay-modal')">×</span>
+            <h2>臨時入住申請</h2>
+            <label>選擇房間：</label>
+            <select id="temp-room"></select>
+            <label>申請人姓名：</label>
+            <input type="text" id="temp-applicant" placeholder="請輸入申請人" oninput="syncTempName()">
+            <label style="display:block; margin: 5px 0;">
+                <input type="checkbox" id="temp-same-person" onchange="syncTempName()"> 住宿大名同申請人
+            </label>
+            <label>住宿大名：</label>
+            <input type="text" id="temp-name" placeholder="請輸入實際住宿者姓名">
+            <label>入住人數：</label>
+            <input type="number" id="temp-count" value="1" min="1">
+            <label>預計入住日期：</label>
+            <input type="date" id="temp-start-date" value="2026-07-01">
+            <label>預計退房日期：</label>
+            <input type="date" id="temp-end-date" value="2026-07-02">
+            <label>住宿申請原因：</label>
+            <select id="temp-reason-select" onchange="toggleTempReasonOther()">
+                <option value="因活動需求，員工申請入住">因活動需求，員工申請入住</option>
+                <option value="合作廠商入住">合作廠商入住</option>
+                <option value="團客司領房">團客司領房</option>
+                <option value="其他">其他 (請於下方填寫原因)</option>
+            </select>
+            <div id="temp-reason-other-box" style="display:none;">
+                <input type="text" id="temp-reason-other-text" placeholder="請輸入自訂原因">
+            </div>
+            <button onclick="submitTempStay()" style="width:100%; margin-top:10px; background-color: #2196F3;">送出臨時入住</button>
+        </div>
+    </div>
+
+    <div id="special-request-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('special-request-modal')">×</span>
+            <h2>✨ 房客狀態特殊需求申請</h2>
+            <label>選擇已入房間：</label>
+            <select id="sr-room"></select>
+            <label>變更特殊需求：</label>
+            <select id="sr-type" onchange="toggleSpecialRequestFields()">
+                <option value="NORMAL">還原常規住宿狀態</option>
+                <option value="WAREHOUSE">申請轉為倉庫 (改按倉庫費計收)</option>
+                <option value="SECURITY">申請轉為保全夜宿房 (免收管理費)</option>
+                <option value="WARDEN">申請轉為舍監房 (免收管理費)</option>
+                <option value="ROOMMATE">申請同住 (維持原費率，新增室友)</option>
+                <option value="LEAVE_RETENTION">房間保留 (改倉庫計費，因留職停薪)</option>
+            </select>
+            <div id="sr-roommate-box" style="display:none;">
+                <label>請輸入室友姓名：</label>
+                <input type="text" id="sr-roommate-name" placeholder="請輸入室友大名">
+            </div>
+            <div id="sr-leave-box" style="display:none;">
+                <label>請選擇留職停薪原因：</label>
+                <select id="sr-leave-reason">
+                    <option value="育嬰留停">育嬰留停</option>
+                    <option value="因病留停">因病留停</option>
+                </select>
+                <label>留停開始日期：</label>
+                <input type="date" id="sr-leave-start" value="2026-07-01" onchange="calculateRetentionFeePreview()">
+                <label>留停預估結束日期：</label>
+                <input type="date" id="sr-leave-end" value="2026-08-01">
+                <div class="calc-preview" id="retention-calc-box">💡 請輸入正確的起迄日期試算。</div>
+            </div>
+            <button onclick="submitSpecialRequest()" style="width:100%; margin-top:15px; background-color: #7e57c2;">確認變更狀態</button>
+        </div>
+    </div>
+
+    <div id="apply-leave-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('apply-leave-modal')">×</span>
+            <h2>申請退宿清除</h2>
+            <label>選擇房間：</label>
+            <select id="leave-room"></select>
+            <label style="margin-top: 10px; display: block;">預定退宿日期：</label>
+            <input type="date" id="leave-date" value="2026-06-30">
+            <button onclick="submitApplyLeave()" style="width:100%; margin-top:10px;">送出退宿</button>
+        </div>
+    </div>
+
+    <div id="backfill-history-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('backfill-history-modal')">×</span>
+            <h2>🛠 手動補登退宿歷史</h2>
+            <p style="font-size:13px; color:#666; line-height:1.6;">
+                適用情境：房間目前顯示「空房」，但因為過去資料遺失或未走正常退宿流程，
+                系統查不到該房客實際入住/退宿的紀錄，導致他該被收費的月份完全消失在清冊裡。
+                在此手動補上正確的歷史紀錄，系統即可正確計算該房客當時應繳的費用。
+            </p>
+            <label>選擇房間：</label>
+            <select id="backfill-room"></select>
+            <label style="margin-top: 10px; display: block;">房客姓名：</label>
+            <input type="text" id="backfill-name" placeholder="例如：王岑瑄">
+            <label style="margin-top: 10px; display: block;">入住日期（若不確定可留空）：</label>
+            <input type="date" id="backfill-checkin-date">
+            <label style="margin-top: 10px; display: block;">實際退宿日期（必填，決定計費在哪個月份）：</label>
+            <input type="date" id="backfill-leave-date">
+            <label style="margin-top: 10px; display: block;">
+                <input type="checkbox" id="backfill-is-warehouse" style="width:auto; margin-right:6px;">此房為倉庫房（套用倉庫管理費）
+            </label>
+            <button onclick="submitBackfillHistory()" style="width:100%; margin-top:15px; background-color: #ad1457;">確認補登歷史紀錄</button>
+        </div>
+    </div>
+
+    <script>
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbw95-wZ_jyk2dMG3zwPkBhVGHbYkLP0GSUM03eDctpQ955sI9u9OxKKMGuz53HUvsJxLQ/exec";
+        const ELECTRICITY_RATE = 5; 
+        // 抄表寬限期（天）：次月初這幾天內抄的表，仍視為上個月的止數（沿用原本 6/7 月的寬限慣例，泛化至所有月份）
+        const METER_READING_GRACE_DAYS = 5;
+
+        /**
+         * [v38.7 修正] TODAY_STR 原本為寫死字串 "2026-07-01"，導致系統認知的「今天」
+         * 永遠停留在該日期，退宿到期自動歸檔（checkAndProcessDateStatus）與各項日期判斷
+         * 都會因此失準。改為即時計算的真實日期。
+         */
+        function getTodayStr() {
+            const d = new Date();
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+        const TODAY_STR = getTodayStr();
+
+        /**
+         * 輔助函式：將 yyyy-mm-dd 日期字串位移 N 天（可為負數）
+         */
+        function shiftDateStr(dateStr, days) {
+            const d = new Date(dateStr + "T00:00:00");
+            d.setDate(d.getDate() + days);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        let rooms = {}; 
+        let configParams = { mgmtFee: 1600, whFee: 500, suiteFee: 2400, historyLogs: [], deferredPayment: {}, lockedMonths: {} };
+        let selectedReportMonth = "2026-06"; 
+        let currentActiveView = "home"; 
+        let lastRawCloudResponse = null; // [v38.7 新增] 保存最近一次雲端「未經處理」的原始回傳內容，供除錯比對用
+
+        /**
+         * [v38.7 新增] 除錯用：直接開新分頁比對「雲端原始回傳」與「前端目前記憶體狀態」，
+         * 方便快速判斷是雲端資料本身就不對，還是前端處理邏輯把資料弄壞了。
+         */
+        function showRawCloudDebug() {
+            const debugWin = window.open('', '_blank');
+            if (!debugWin) {
+                alert("瀏覽器攔截了彈出視窗，請允許本網站的彈出視窗後再試一次。");
+                return;
+            }
+            const raw = (lastRawCloudResponse !== null)
+                ? lastRawCloudResponse
+                : { 提示: "尚未成功取得雲端原始資料（目前可能處於離線/備援模式，請參考頁面上方的紅色警示橫幅）" };
+            const esc = (obj) => JSON.stringify(obj, null, 2).replace(/</g, '&lt;');
+            debugWin.document.write(
+                '<html><head><meta charset="utf-8"><title>雲端原始資料除錯</title></head>' +
+                '<body style="font-family:monospace; padding:16px;">' +
+                '<h3>① GAS 雲端「原始」回傳內容（尚未經過任何前端歸檔/相容性處理）</h3>' +
+                '<pre style="white-space:pre-wrap; background:#f5f5f5; padding:10px; border:1px solid #ccc;">' + esc(raw) + '</pre>' +
+                '<h3>② 前端目前記憶體中的 rooms 狀態（已套用 v38 歸檔/相容性處理後）</h3>' +
+                '<pre style="white-space:pre-wrap; background:#eef; padding:10px; border:1px solid #ccc;">' + esc(rooms) + '</pre>' +
+                '</body></html>'
+            );
+            debugWin.document.close();
+        }
+
+        const DEFAULT_ROOMS_DATA = {
+            "1-1": {name: "簡鴻存", isWarehouse: false, readings: [{date: "2026-05-04", value: 3732.2}], leaveDate: "", checkInDate: "2026-05-01"},
+            "1-2": {name: "簡鴻存", isWarehouse: true, readings: [{date: "2026-05-04", value: 1480}], leaveDate: "", checkInDate: "2026-05-01"},
+            "1-3": {name: "劉雨婷", isWarehouse: true, readings: [{date: "2026-05-04", value: 1886.3}], leaveDate: "", checkInDate: "2026-05-01"},
+            "1-4": {name: "李美娟", isWarehouse: false, readings: [{date: "2026-05-04", value: 2663.6}], leaveDate: "", checkInDate: "2026-05-01"},
+            "1-5": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 13.8}], leaveDate: ""},
+            "1-6": {name: "楊曉嵐", isWarehouse: false, readings: [{date: "2026-05-04", value: 1308.4}], leaveDate: "", checkInDate: "2026-05-01"},
+            "1-7": {name: "蘇建政", isWarehouse: false, readings: [{date: "2026-05-04", value: 1955.6}], leaveDate: "", checkInDate: "2026-05-01", isSecurityOnly: true},
+            "2-1": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 1065.5}], leaveDate: ""},
+            "2-2": {name: "宿舍備品室", isWarehouse: false, readings: [{date: "2026-05-04", value: 385.2}], leaveDate: "", isSpecialLock: true},
+            "2-6": {name: "蔡玉萍", isWarehouse: false, readings: [{date: "2026-05-04", value: 2665}], leaveDate: "", checkInDate: "2026-05-01"},
+            "3-1": {name: "", isWarehouse: true, readings: [{date: "2026-05-04", value: 530.2}], leaveDate: "2026-06-30", checkInDate: "2026-05-01", lastArchivedName: "劉雨婷", lastArchivedIsWarehouse: true},
+            "3-7": {name: "楊曉嵐", isWarehouse: false, readings: [{date: "2026-05-04", value: 997.4}], leaveDate: "", checkInDate: "2026-05-01"},
+            "4-1": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 0}], leaveDate: "", isDriverOnly: true},
+            "4-2": {name: "", isWarehouse: false, readings: [{date: "2026-05-04", value: 0}], leaveDate: "", isDriverOnly: true},
+            "4-3": {name: "王岑瑄", isWarehouse: false, readings: [{date: "2026-05-31", value: 3308.6}], leaveDate: "2026-05-31", checkInDate: "2026-05-31"},
+            "4-4": {name: "王岑瑄", isWarehouse: true, readings: [{date: "2026-05-31", value: 903.1}], leaveDate: "2026-05-31", checkInDate: "2026-05-31"},
+            "4-5": {name: "李泓楷", isWarehouse: false, readings: [{date: "2026-05-04", value: 1177.1}], leaveDate: "", checkInDate: "2026-05-01"},
+            "5-1": {name: "謝俊逸", isWarehouse: false, readings: [{date: "2026-05-04", value: 4043.4}], leaveDate: "", checkInDate: "2026-05-01"}
+        };
+
+        const ALL_FLOORS = {
+            '第一排': ['1-1','1-2','1-3','1-4','1-5','1-6','1-7'],
+            '第二排': ['2-1','2-2','2-3','2-4','2-5','2-6','2-7'],
+            '第三排': ['3-1','3-2','3-3','3-4','3-5','3-6','3-7'],
+            '第四排': ['4-1','4-2','4-3','4-4','4-5','4-6','4-7'],
+            '第五排': ['5-1'],
+            '公共區域': ['公共區域A', '公共區域B']
+        };
+
+        // ====================================================================
+        // v38 核心模組：歷史履歷演算法 (stayHistory) 核心實作
+        // ====================================================================
+
+        /**
+         * 輔助函式：判斷日期是否落在指定月份
+         */
+        function isDateInMonth(dateStr, monthStr) {
+            if (!dateStr) return false;
+            return dateStr.startsWith(monthStr);
+        }
+
+        /**
+         * [v38.7 新增] 統一日期正規化：Google 試算表經由 GAS 序列化後，日期欄位常常會變成
+         * 完整 ISO 時間戳記（例如 "2026-05-31T00:00:00.000Z"），甚至因時區轉換（UTC 與台灣
+         * GMT+8 的落差）造成日期往前推一天、進而讓月份前綴比對（isDateInMonth／stayHistory
+         * 查找）整個對不上，導致「退宿人員費用又沒有算到」。
+         * 這裡一律用「字串截取」取代「重新建構 Date 物件」，避免再次引入時區位移問題。
+         */
+        function toDateOnlyStr(v) {
+            if (v === null || v === undefined || v === "") return "";
+            if (typeof v === "string") {
+                const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
+                if (m) return m[1];
+                const d = new Date(v);
+                if (!isNaN(d.getTime())) {
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+                return "";
+            }
+            if (v instanceof Date) {
+                if (isNaN(v.getTime())) return "";
+                return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+            }
+            if (typeof v === "number") {
+                const d = new Date(v);
+                if (!isNaN(d.getTime())) {
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+            }
+            return "";
+        }
+
+        /**
+         * 走訪雲端載入後的所有房間資料，將所有日期欄位統一正規化為乾淨的 "YYYY-MM-DD" 字串，
+         * 讓後續所有比對邏輯（isDateInMonth、字串大小比較、退宿截止時間計算等）都能安全運作。
+         */
+        function normalizeAllRoomDates() {
+            if (!rooms) return;
+            Object.keys(rooms).forEach(roomId => {
+                const room = rooms[roomId];
+                if (!room) return;
+                if (room.leaveDate !== undefined) room.leaveDate = toDateOnlyStr(room.leaveDate);
+                if (room.checkInDate !== undefined) room.checkInDate = toDateOnlyStr(room.checkInDate);
+                if (Array.isArray(room.readings)) {
+                    room.readings.forEach(r => { if (r) r.date = toDateOnlyStr(r.date); });
+                }
+                if (Array.isArray(room.tempList)) {
+                    room.tempList.forEach(t => {
+                        if (!t) return;
+                        if (t.startDate !== undefined) t.startDate = toDateOnlyStr(t.startDate);
+                        if (t.endDate) t.endDate = toDateOnlyStr(t.endDate);
+                    });
+                }
+                if (Array.isArray(room.stayHistory)) {
+                    room.stayHistory.forEach(h => {
+                        if (!h) return;
+                        if (h.checkInDate !== undefined) h.checkInDate = toDateOnlyStr(h.checkInDate);
+                        if (h.leaveDate !== undefined) h.leaveDate = toDateOnlyStr(h.leaveDate);
+                    });
+                }
+            });
+        }
+
+        /**
+         * 歸檔特定房間現有房客至 stayHistory
+         */
+        function archiveRoomStay(roomId, optionalLeaveDate = null) {
+            const room = rooms[roomId];
+            if (!room || !room.name) return false;
+            
+            if (!room.stayHistory) room.stayHistory = [];
+            
+            const finalLeaveDate = optionalLeaveDate || room.leaveDate || TODAY_STR;
+            
+            const historyEntry = {
+                name: room.name,
+                isWarehouse: !!room.isWarehouse,
+                isWarden: !!room.isWarden,
+                isSecurityOnly: !!room.isSecurityOnly,
+                isLeaveRetention: !!room.isLeaveRetention,
+                leaveRetentionReason: room.leaveRetentionReason || "",
+                hasRoommate: !!room.hasRoommate,
+                roommateName: room.roommateName || "",
+                checkInDate: room.checkInDate || "",
+                leaveDate: finalLeaveDate
+            };
+            if (typeof room.managementFee === 'number') {
+                historyEntry.managementFee = room.managementFee;
+            }
+            
+            room.stayHistory.push(historyEntry);
+            return true;
+        }
+
+        /**
+         * 依月份至 stayHistory 優先查找退宿歷史履歷
+         */
+        function findHistoryLeaveInMonth(roomId, monthStr) {
+            const room = rooms[roomId];
+            if (!room || !room.stayHistory || room.stayHistory.length === 0) return null;
+            
+            // 優先找出：退宿日期（leaveDate）落在該計費月份的紀錄
+            return room.stayHistory.find(h => isDateInMonth(h.leaveDate, monthStr)) || null;
+        }
+
+        /**
+         * 舊資料自動相容與修復遷移機制 (防重複)
+         */
+        function migrateLegacyArchiveIfNeeded() {
+            let migratedCount = 0;
+            Object.keys(rooms).forEach(roomId => {
+                const room = rooms[roomId];
+                if (!room) return;
+                if (!room.stayHistory) room.stayHistory = [];
+                
+                // 若發現舊架構留有退宿痕跡且尚未同步至陣列中，自動幫行政人員補齊履歷
+                if (!room.name && room.leaveDate && room.lastArchivedName) {
+                    const alreadyMigrated = room.stayHistory.some(h => 
+                        h.name === room.lastArchivedName && h.leaveDate === room.leaveDate
+                    );
+                    
+                    if (!alreadyMigrated) {
+                        room.stayHistory.push({
+                            name: room.lastArchivedName,
+                            isWarehouse: room.lastArchivedIsWarehouse !== undefined ? !!room.lastArchivedIsWarehouse : !!room.isWarehouse,
+                            isWarden: !!room.isWarden,
+                            isSecurityOnly: !!room.isSecurityOnly,
+                            isLeaveRetention: !!room.isLeaveRetention,
+                            leaveRetentionReason: room.leaveRetentionReason || "",
+                            hasRoommate: !!room.hasRoommate,
+                            roommateName: room.roommateName || "",
+                            checkInDate: room.checkInDate || "2026-05-01",
+                            leaveDate: room.leaveDate
+                        });
+                        migratedCount++;
+                    }
+                }
+            });
+            if (migratedCount > 0) {
+                console.log(`[歷史遷移] v38 已自動將 ${migratedCount} 筆舊式退宿封存資料轉換至 stayHistory 軌跡陣列中。`);
+            }
+        }
+
+        // ====================================================================
+        // 行政異動與計費業務邏輯整合
+        // ====================================================================
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebar-overlay').classList.toggle('open');
+        }
+
+        function showLoading(status) {
+            document.getElementById('loading-overlay').style.display = status ? 'block' : 'none';
+        }
+
+        function isCurrentMonthLocked() {
+            if(!configParams || !configParams.lockedMonths) return false;
+            return configParams.lockedMonths[selectedReportMonth] === true;
+        }
+
+        /**
+         * 到期自動判定：系統時間重置、到期日呼叫 archiveRoomStay() 完整歸檔
+         */
+        async function checkAndProcessDateStatus() {
+            let needsSave = false;
+            Object.keys(rooms).forEach(roomId => {
+                const room = rooms[roomId];
+                if (room.tempList && room.tempList.length > 0) {
+                    const origLen = room.tempList.length;
+                    room.tempList = room.tempList.filter(t => !t.endDate || t.endDate > TODAY_STR);
+                    if (room.tempList.length !== origLen) needsSave = true;
+                    if (room.tempList.length === 0) {
+                        delete room.tempList;
+                        if(room.isTemp) {
+                            room.name = ''; room.isTemp = false; room.tempInfo = null; room.checkInDate = ''; room.leaveDate = '';
+                            needsSave = true;
+                        }
+                    } else {
+                        syncActiveTempRecord(roomId);
+                    }
+                } 
+                
+                if (room.leaveDate && room.leaveDate <= TODAY_STR && !room.isTemp) {
+                    if (room.name) {
+                        // 執行 v38 歷史履歷陣列歸檔
+                        archiveRoomStay(roomId, room.leaveDate);
+                        
+                        room.lastArchivedName = room.name; 
+                        room.lastArchivedIsWarehouse = room.isWarehouse;
+                        room.name = ''; 
+                        needsSave = true;
+                    }
+                }
+                if (room.isBookingFuture && room.checkInDate && room.checkInDate <= TODAY_STR) {
+                    room.isBookingFuture = false;
+                    needsSave = true;
+                }
+            });
+            if (needsSave) {
+                await saveToCloud();
+            }
+        }
+
+        function syncActiveTempRecord(roomId) {
+            const room = rooms[roomId];
+            if(!room || !room.tempList || room.tempList.length === 0) return;
+            let activeTemp = room.tempList[room.tempList.length - 1]; 
+            room.name = activeTemp.name;
+            room.isTemp = true;
+            room.checkInDate = activeTemp.startDate;
+            room.leaveDate = activeTemp.endDate;
+            room.tempInfo = activeTemp;
+        }
+
+        async function loadCloudData() {
+            showLoading(true);
+            let cloudLoadFailed = false;
+            let failReason = "";
+
+            try {
+                const response = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
+                if (!response.ok) {
+                    throw new Error(`雲端伺服器回應異常 (HTTP ${response.status})`);
+                }
+                const cloudRooms = await response.json();
+                lastRawCloudResponse = cloudRooms;
+                console.log("[除錯] 雲端原始回傳內容：", cloudRooms);
+
+                if (cloudRooms && cloudRooms.SYSTEM_ROOMS_DATA && Object.keys(cloudRooms.SYSTEM_ROOMS_DATA).length > 0) {
+                    rooms = cloudRooms.SYSTEM_ROOMS_DATA;
+                    if(cloudRooms.SYSTEM_CONFIG) { configParams = cloudRooms.SYSTEM_CONFIG; }
+                    normalizeAllRoomDates();
+                } else if (cloudRooms && Object.keys(cloudRooms).length > 2) {
+                    rooms = cloudRooms;
+                    normalizeAllRoomDates();
+                } else {
+                    // [v38.7 修正] 這裡原本會立刻執行 saveToCloud()，把內建的舊版預設資料
+                    // 反向寫回 Google 試算表——一旦雲端因暫時性問題（例如試算表尚未建好、
+                    // GAS 部署設定跑掉、或回傳格式意外改變）回傳空內容，就會被這段程式碼
+                    // 誤判為「全新系統、需要初始化」，把試算表裡真實的退宿日期、最新電表
+                    // 讀數、管理費資料整批覆蓋、遺失！這正是「試算表資料沒有進來、金額都
+                    // 不是最新的」的根本原因之一。
+                    // 修正：絕對不自動覆寫雲端。只在本機記憶體暫時套用內建預設值供檢視，
+                    // 並明確提示管理者目前並非最新真實資料，避免被誤導收費。
+                    cloudLoadFailed = true;
+                    failReason = "雲端資料庫回傳內容為空或格式不符（可能是 Google 試算表尚未寫入資料、GAS 網址設定錯誤，或部署權限異常）";
+                    rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
+                    initMissingRooms();
+                }
+            } catch (error) {
+                console.error("Cloud data loading issue:", error);
+                cloudLoadFailed = true;
+                failReason = "無法連線至雲端資料庫（" + (error.message || error) + "）";
+                rooms = JSON.parse(JSON.stringify(DEFAULT_ROOMS_DATA));
+            }
+
+            const warningBox = document.getElementById('cloud-sync-warning');
+            if (warningBox) warningBox.style.display = cloudLoadFailed ? 'block' : 'none';
+
+            if (cloudLoadFailed) {
+                alert(
+                    "⚠️ 雲端資料同步失敗！\n" + failReason + "\n\n" +
+                    "目前畫面顯示的是系統內建的『備用預設資料』，並非 Google 試算表中最新的真實資料！\n" +
+                    "電表度數、管理費金額、退宿紀錄等都可能是過期或不正確的，請勿依此對外收費，\n" +
+                    "並請盡快檢查網路連線或 GAS 網址設定，重新整理頁面後再試一次。\n" +
+                    "（系統這次不會自動將此備用資料覆寫回雲端試算表，以避免真實資料遺失。）"
+                );
+            }
+
+            declareDataFields();
+        }
+
+        async function declareDataFields() {
+            if(!configParams) configParams = {};
+            if(!configParams.historyLogs) configParams.historyLogs = [];
+            if(!configParams.deferredPayment) configParams.deferredPayment = {};
+            if(!configParams.lockedMonths) configParams.lockedMonths = {};
+            if(!configParams.mgmtFee) configParams.mgmtFee = 1600;
+            if(!configParams.whFee) configParams.whFee = 500;
+            if(!configParams.suiteFee) configParams.suiteFee = 2400;
+
+            document.getElementById('cfg-mgmt-fee').value = configParams.mgmtFee;
+            document.getElementById('cfg-wh-fee').value = configParams.whFee;
+            document.getElementById('cfg-suite-fee').value = configParams.suiteFee;
+
+            initMissingRooms();
+            migrateLegacyArchiveIfNeeded(); // 開機自動安全校驗並遷移
+            await checkAndProcessDateStatus(); 
+            renderRoomList();
+            renderRateHistory();
+            
+            if(currentActiveView === "home") showDefaultHome();
+            else if(currentActiveView === "temp_list") showTempStayList();
+            else switchRoom(currentActiveView);
+            
+            showLoading(false);
+        }
+
+        async function saveToCloud() {
+            showLoading(true);
+            const packageData = { SYSTEM_ROOMS_DATA: rooms, SYSTEM_CONFIG: configParams };
+            try {
+                const resp = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(packageData)
+                });
+                if (!resp.ok) {
+                    throw new Error(`雲端伺服器回應異常 (HTTP ${resp.status})`);
+                }
+            } catch (error) {
+                // [v38.7 修正] 原本這裡只是 console.log 假裝成功，儲存失敗時管理者完全不會發現，
+                // 導致剛剛修改的退宿日期／電表讀數／管理費事實上根本沒有寫回 Google 試算表。
+                console.error("Cloud save failed:", error);
+                alert(
+                    "⚠️ 儲存至雲端試算表失敗！\n" + (error.message || error) + "\n\n" +
+                    "您剛剛的修改目前僅存在於本機畫面，尚未真正寫回 Google 試算表，\n" +
+                    "請檢查網路連線後重試，避免資料遺失。"
+                );
+            }
+            finally {
+                renderRoomList();
+                renderRateHistory();
+                if(currentActiveView === "home") showDefaultHome();
+                else if(currentActiveView === "temp_list") showTempStayList();
+                else switchRoom(currentActiveView);
+                showLoading(false);
+            }
+        }
+
+        function saveConfigParams() {
+            if(isCurrentMonthLocked()) { alert("⚠️ 當前選取的月份財務已結案鎖定，無法變更參數費率！"); return; }
+            configParams.mgmtFee = parseFloat(document.getElementById('cfg-mgmt-fee').value) || 0;
+            configParams.whFee = parseFloat(document.getElementById('cfg-wh-fee').value) || 0;
+            configParams.suiteFee = parseFloat(document.getElementById('cfg-suite-fee').value) || 0;
+            const effDate = document.getElementById('cfg-effective-date').value;
+
+            const logStr = `${effDate} 起: 一般 ${configParams.mgmtFee} | 倉庫 ${configParams.whFee} | 套房 ${configParams.suiteFee}`;
+            configParams.historyLogs.unshift(logStr);
+
+            alert(`✅ 費率參數更新成功！`);
+            saveToCloud();
+        }
+
+        function renderRateHistory() {
+            const logBox = document.getElementById('rate-history-log');
+            if(!logBox) return;
+            if(!configParams.historyLogs || configParams.historyLogs.length === 0) {
+                logBox.innerHTML = "暫無歷史變更紀錄";
+                return;
+            }
+            logBox.innerHTML = configParams.historyLogs.map(log => `• ${log}`).join('<br>');
+        }
+
+        function initMissingRooms() {
+            Object.values(ALL_FLOORS).forEach(roomList => {
+                roomList.forEach(roomId => {
+                    if (!rooms[roomId]) {
+                        rooms[roomId] = { name: "", isWarehouse: false, readings: [], leaveDate: "", checkInDate: "", stayHistory: [] };
+                    }
+                    if (!rooms[roomId].stayHistory) rooms[roomId].stayHistory = [];
+                    if(roomId === "2-2") rooms[roomId].isSpecialLock = true;
+                    if(roomId === "4-1" || roomId === "4-2") rooms[roomId].isDriverOnly = true;
+                });
+            });
+        }
+
+        /**
+         * 側邊欄渲染：優先從 stayHistory 找回退宿房客大名與狀態標籤
+         */
+        function renderRoomList() {
+            const list = document.getElementById('room-list');
+            if(!list) return;
+            list.innerHTML = '';
+            
+            Object.keys(ALL_FLOORS).forEach(floorName => {
+                const floorDiv = document.createElement('div');
+                floorDiv.innerHTML = `<div class="floor-header" onclick="toggleFloor(this)">${floorName}</div>`;
+                const floorContent = document.createElement('div');
+                floorContent.className = 'floor-content';
+                floorContent.style.display = 'block';
+                
+                ALL_FLOORS[floorName].forEach(roomId => {
+                    const room = rooms[roomId];
+                    const item = document.createElement('div');
+                    
+                    let displayName = roomId; let tags = ''; let isEmpty = false;
+
+                    // 1. 優先使用 v38 歷史履歷陣列查找
+                    const historyLeave = findHistoryLeaveInMonth(roomId, selectedReportMonth);
+
+                    if (roomId.includes("公共區域")) {
+                        displayName = roomId;
+                    } else if (room.isSpecialLock) {
+                        displayName = `${roomId} 備品室`;
+                        tags += '<span class="tag tag-special">管制</span>';
+                    } else if (room.isTemp && room.tempInfo) {
+                        displayName = `${roomId} ${room.name || room.tempInfo.name || ''}`;
+                    } else if (room.name) {
+                        let nameStr = room.name;
+                        if(room.hasRoommate && room.roommateName) nameStr += ` + ${room.roommateName}`;
+                        displayName = `${roomId} ${nameStr}`;
+                        if(room.isBookingFuture) displayName = `${roomId}`;
+                    } else if (historyLeave) {
+                        let nameStr = historyLeave.name;
+                        if(historyLeave.hasRoommate && historyLeave.roommateName) nameStr += ` + ${historyLeave.roommateName}`;
+                        displayName = `${roomId} ${nameStr}`;
+                    } else if (room.leaveDate && isDateInMonth(room.leaveDate, selectedReportMonth)) {
+                        let nameStr = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || "已退客房";
+                        displayName = `${roomId} ${nameStr}`;
+                    } else {
+                        displayName = `${roomId} (空房)`;
+                        isEmpty = true;
+                    }
+                    
+                    item.className = `room-item ${roomId === currentActiveView ? 'active' : ''} ${isEmpty ? 'empty-room' : ''}`;
+                    if (room.isDriverOnly && !room.name) tags += '<span class="tag tag-special" style="background:#5c6bc0;">司領房</span>';
+                    
+                    if (!roomId.includes("公共區域")) {
+                        if (room.name && room.isBookingFuture) {
+                            tags += `<span class="tag tag-booking">📅 預約(${room.name})</span>`;
+                        } else if (room.name || historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, selectedReportMonth))) {
+                            
+                            // 判斷要採用的屬性資料來源
+                            const targetAuth = historyLeave || room; 
+                            
+                            if (targetAuth.isWarden) { tags += '<span class="tag tag-warden">舍監</span>'; }
+                            if (targetAuth.isLeaveRetention) { tags += `<span class="tag tag-leave-status">⏳ 留停房</span>`; }
+                            if (targetAuth.isSecurityOnly) { tags += '<span class="tag tag-special" style="background:#4caf50;">保全</span>'; }
+                            if (targetAuth.isWarehouse && !targetAuth.isLeaveRetention) { tags += '<span class="tag tag-warehouse">倉庫</span>'; }
+                            if (targetAuth.hasRoommate) { tags += '<span class="tag tag-special" style="background:#00bcd4;">雙人同住</span>'; }
+                            
+                            if (room.isTemp) { 
+                                let dateLabel = "";
+                                if(room.tempInfo && room.tempInfo.startDate) {
+                                    const dParts = room.tempInfo.startDate.split('-');
+                                    if(dParts.length === 3) { dateLabel = `${parseInt(dParts[1])}/${parseInt(dParts[2])} `; }
+                                }
+                                tags += `<span class="tag tag-temp">${dateLabel}臨時</span>`; 
+                            }
+                            
+                            if (historyLeave) {
+                                tags += `<span class="tag tag-leave">${monthStrFilter(historyLeave.leaveDate)}已退</span>`;
+                            } else if (room.leaveDate) { 
+                                tags += `<span class="tag tag-leave">${monthStrFilter(room.leaveDate)}已退</span>`; 
+                            }
+                        }
+                    }
+                    
+                    item.innerHTML = `${displayName}${tags}`;
+                    item.onclick = () => {
+                        switchRoom(roomId);
+                        if(window.innerWidth <= 768) toggleMenu();
+                    };
+                    floorContent.appendChild(item);
+                });
+                floorDiv.appendChild(floorContent);
+                list.appendChild(floorDiv);
+            });
+        }
+
+        function monthStrFilter(dateStr) {
+            if(!dateStr) return "";
+            const p = dateStr.split('-');
+            return p.length >= 2 ? `${parseInt(p[1])}月` : "";
+        }
+
+        function toggleFloor(el) {
+            const content = el.nextElementSibling;
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function toggleLockMonth() {
+            if(!configParams.lockedMonths) configParams.lockedMonths = {};
+            const isLocked = configParams.lockedMonths[selectedReportMonth] === true;
+            if(isLocked) {
+                if(confirm(`🔓 確定要「解除」 ${selectedReportMonth} 月的結案鎖定嗎？`)) {
+                    configParams.lockedMonths[selectedReportMonth] = false;
+                    await saveToCloud();
+                }
+            } else {
+                if(confirm(`🔒 確定要將 ${selectedReportMonth} 月進行「會計結案鎖定」嗎？`)) {
+                    configParams.lockedMonths[selectedReportMonth] = true;
+                    await saveToCloud();
+                }
+            }
+        }
+
+        function showDefaultHome() {
+            currentActiveView = "home";
+            renderRoomList();
+            const displayArea = document.getElementById('main-display-area');
+            if(!displayArea) return;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            const isLocked = isCurrentMonthLocked();
+            const lockBtnText = isLocked ? "🔓 解除此月結案" : "🔒 執行此月會計結案";
+            const lockBadge = isLocked ? `<span style="background:#c62828; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">🔒 已結案鎖定</span>` : `<span style="background:#4caf50; color:white; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:13px; margin-left:10px;">開放中</span>`;
+
+            let html = `
+                <div class="bill-summary-box" style="margin-top:0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:18px; font-weight:bold;">📅 財務結算清冊月份：</span>
+                            <select id="report-month-select" onchange="changeReportMonth(this.value)" style="width:130px; margin:0; padding:6px;">
+                                ${generateMonthOptions()}
+                            </select>
+                            ${lockBadge}
+                            <button onclick="exportTableToExcel('finance-table')" style="background-color: #2e7d32; font-size: 13px; padding: 6px 12px; margin-left:10px;">📥 下載 XLS 報表</button>
+                        </div>
+                        <button onclick="toggleLockMonth()" style="background:${isLocked?'#666':'#d9534f'}; margin:0; padding:8px 12px; font-size:13px;">${lockBtnText}</button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table id="finance-table">
+                        <thead>
+                            <tr>
+                                <th>房號</th>
+                                <th>現況名稱</th>
+                                <th>上月結數</th>
+                                <th>本月止數</th>
+                                <th>用電度數</th>
+                                <th>電費金額</th>
+                                <th>月管理費</th>
+                                <th>應收總計</th>
+                                <th>延至下期</th>
+                                <th>備註說明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            let residentElec = 0, residentMgmt = 0, residentTotal = 0;
+            let companyElec = 0; 
+            let groupIdx = 0;
+
+            Object.keys(ALL_FLOORS).forEach(floorName => {
+                html += `<tr class="floor-row-header"><td colspan="10">${floorName}</td></tr>`;
+                
+                ALL_FLOORS[floorName].forEach(roomId => {
+                    const room = rooms[roomId];
+                    if(!room) return;
+
+                    let rowClass = `floor-group-${groupIdx % 6}`;
+                    let calc = calculateRoomBill(roomId, selectedReportMonth);
+
+                    if (calc.isTenantCharge) {
+                        residentElec += calc.elecFee;
+                        residentMgmt += calc.mgmtFee;
+                        residentTotal += calc.total;
+                    } else {
+                        companyElec += calc.elecFee;
+                    }
+
+                    let deferKey = `${roomId}_${selectedReportMonth}`;
+                    let isDeferred = (configParams.deferredPayment && configParams.deferredPayment[deferKey] === true);
+                    let checkboxStr = calc.isTenantCharge ? `<input type="checkbox" onchange="toggleDeferPayment('${roomId}', '${selectedReportMonth}', this.checked)" ${isDeferred ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>` : '—';
+
+                    html += `
+                        <tr class="${rowClass}">
+                            <td><b>${roomId}</b></td>
+                            <td>${calc.nameDisplay}</td>
+                            <td>${calc.prev}</td>
+                            <td>${calc.curr}</td>
+                            <td>${calc.degree}</td>
+                            <td>$${calc.elecFee}</td>
+                            <td>$${calc.mgmtFee}</td>
+                            <td style="color:${calc.isTenantCharge ? '#b22222' : '#666'}; font-weight:bold;">$${calc.total}</td>
+                            <td>${checkboxStr}</td>
+                            <td style="text-align:left; font-size:12px; max-width:180px; color:#c62828;">${calc.note}</td>
+                        </tr>
+                    `;
+                });
+                groupIdx++;
+            });
+
+            let finalGrandTotal = residentTotal + companyElec;
+
+            html += `
+                            <tr style="background:#fff9db; font-weight:bold; border-top:2px solid #e6db55;">
+                                <td colspan="5" style="text-align:right; color:#b22222;">👤 房客應收部分小計：</td>
+                                <td style="color:#b22222;">$${residentElec}</td>
+                                <td style="color:#b22222;">$${residentMgmt}</td>
+                                <td style="color:#b22222; font-size:15px;" colspan="2">$${residentTotal}</td>
+                                <td style="text-align:left; font-size:12px; color:#666;">向住宿同仁與倉庫計收之款項</td>
+                            </tr>
+                            <tr style="background:#f1f3f5; font-weight:bold; color:#495057;">
+                                <td colspan="5" style="text-align:right;">🏢 公共區域 / 空房自用電費小計：</td>
+                                <td>$${companyElec}</td>
+                                <td>$0</td>
+                                <td colspan="2">$${companyElec}</td>
+                                <td style="text-align:left; font-size:12px; color:#666;">公司負擔吸收之內部公用及空置房電費</td>
+                            </tr>
+                            <tr style="background:#e2ede4; font-weight:bold; border-top:2px solid #0f4c2a; font-size:15px;">
+                                <td colspan="5" style="text-align:right; color:#0f4c2a;">📊 全廠電表與管理費總開銷 (大計)：</td>
+                                <td style="color:#0f4c2a;">$${residentElec + companyElec}</td>
+                                <td style="color:#0f4c2a;">$${residentMgmt}</td>
+                                <td style="color:#d9534f; font-size:18px;" colspan="2">$${finalGrandTotal}</td>
+                                <td style="text-align:left; font-size:12px; color:#0f4c2a;">(房客應收 $${residentTotal} + 公司吸收 $${companyElec})</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            displayArea.innerHTML = html;
+            document.getElementById('report-month-select').value = selectedReportMonth;
+        }
+
+        async function toggleDeferPayment(roomId, monthStr, isChecked) {
+            if(!configParams.deferredPayment) configParams.deferredPayment = {};
+            let deferKey = `${roomId}_${monthStr}`;
+            configParams.deferredPayment[deferKey] = isChecked;
+            await saveToCloud();
+        }
+
+        function generateMonthOptions() {
+            let options = "";
+            for(let m=1; m<=12; m++) {
+                let mStr = m < 10 ? `0${m}` : `${m}`;
+                let opt = `2026-${mStr}`;
+                options += `<option value="${opt}">${opt} 月</option>`;
+            }
+            return options;
+        }
+
+        function changeReportMonth(val) {
+            selectedReportMonth = val;
+            showDefaultHome();
+        }
+
+
+        /**
+         * v38 計費模組：優先追溯 stayHistory 履歷陣列，徹底消除覆蓋失蹤 Bug
+         */
+        function calculateRoomBill(roomId, monthStr) {
+            const room = rooms[roomId];
+            let res = { nameDisplay: "空房", prev: "—", curr: "—", degree: 0, elecFee: 0, mgmtFee: 0, total: 0, note: "", isTenantCharge: false };
+            
+            if(!room) return res;
+
+            let isPublic = roomId.includes("公共");
+            
+            // A. 優先進行 v38 歷史履歷比對
+            let historyLeave = findHistoryLeaveInMonth(roomId, monthStr);
+            let historyLeaveApplies = !!historyLeave || (room.leaveDate && isDateInMonth(room.leaveDate, monthStr));
+
+            // 是否有臨時房客在本月入住
+            let hasTempInThisMonth = false;
+            if(room.isTemp && room.tempList && room.tempList.length > 0) {
+                hasTempInThisMonth = room.tempList.some(t => t.startDate && isDateInMonth(t.startDate, monthStr));
+            }
+            // 房間目前是否有「正在計費中」的長期房客涵蓋本月（同月換房時，新房客才是本月真正應計費對象）
+            let isCurrentResidentActiveThisMonth = !room.isTemp && !!room.name && (!room.checkInDate || room.checkInDate <= `${monthStr}-31`);
+
+            // [v38.7 修正] 退宿歷史紀錄只有在「本房間當月沒有其他正在計費中的房客/臨時房客」時
+            // 才作為本月主要計費依據，避免同月份「舊房客退宿、新房客入住」的換房情境下，
+            // 舊房客的退宿紀錄蓋過新房客當月應收的帳單（新房客因此完全沒被計費）。
+            let isLeavedInThisMonth = historyLeaveApplies && !isCurrentResidentActiveThisMonth && !hasTempInThisMonth;
+            
+            let activeName = "";
+            let isWh = room.isWarehouse;
+            let targetAuth = room;
+
+            // ---- 🔀 重新梳理身分判定權限，絕對互斥，避免洗掉 ----
+            if (isPublic) {
+                res.nameDisplay = "公共分攤區域";
+                res.isTenantCharge = false; 
+            } else if (isLeavedInThisMonth) {
+                // 【情境 1：當月退宿，且房間本月無新房客/臨時房客承接】最高優先權
+                if (historyLeave) {
+                    activeName = historyLeave.name;
+                    if (historyLeave.hasRoommate && historyLeave.roommateName) activeName += ` + ${historyLeave.roommateName}`;
+                    isWh = historyLeave.isWarehouse;
+                    targetAuth = historyLeave;
+                } else {
+                    activeName = room.lastArchivedName || DEFAULT_ROOMS_DATA[roomId]?.lastArchivedName || room.name || "已退宿房客";
+                    isWh = (room.lastArchivedIsWarehouse !== undefined) ? room.lastArchivedIsWarehouse : room.isWarehouse;
+                }
+                res.note += `[${monthStrFilter(historyLeave ? historyLeave.leaveDate : room.leaveDate)}退宿清算] `;
+                res.isTenantCharge = true; 
+            } else if (room.isTemp) {
+                // 【情境 2：臨時房客】次要優先權
+                if(hasTempInThisMonth) {
+                    activeName = room.name;
+                    isWh = false;
+                    res.isTenantCharge = true;
+                } else {
+                    activeName = "";
+                    res.isTenantCharge = false;
+                }
+            } else if (room.name) {
+                // 【情境 3：常規長期房客】（含本月同時發生退宿換房的情況）
+                if (room.checkInDate && room.checkInDate > `${monthStr}-31`) {
+                    activeName = ""; // 未來預約，當月不計費
+                    res.isTenantCharge = false;
+                } else {
+                    activeName = room.name;
+                    if(room.hasRoommate && room.roommateName) activeName += ` + ${room.roommateName}`;
+                    res.isTenantCharge = true; 
+
+                    // 若本房間同一個月份剛好也有舊房客退宿紀錄（同月換房），一併在備註中註明，
+                    // 避免舊房客的退宿資訊被吃掉、造成「已退宿卻查無紀錄」的錯覺。
+                    if (historyLeaveApplies) {
+                        let prevLeaveDate = historyLeave ? historyLeave.leaveDate : room.leaveDate;
+                        let prevName = historyLeave ? historyLeave.name : (room.lastArchivedName || "");
+                        if (prevName) {
+                            res.note += `[本房於${monthStrFilter(prevLeaveDate)}換人，原房客 ${prevName} 已退宿] `;
+                        }
+                    }
+                }
+            } else {
+                // 【情境 4：真正空房】
+                activeName = "";
+                res.isTenantCharge = false;
+            }
+
+            // ---- ⚡ 電表抄表度數度數區間試算 ----
+            // [v38.7 修正] 原本抄表區間判斷寫死只處理 "2026-06" 與 "2026-07" 兩個月份，
+            // 其餘月份（例如退宿發生在其他月份時）完全沒有「以退宿日截止抄表」的保護，
+            // 也造成程式碼難以維護。改為泛用邏輯，並保留原本「次月初 N 天內抄表仍算當月止數」
+            // 的寬限期慣例（METER_READING_GRACE_DAYS），適用於所有月份。
+            if(room.readings && room.readings.length > 0) {
+                let sorted = [...room.readings].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                let graceDays = METER_READING_GRACE_DAYS;
+                let [gy, gm] = monthStr.split('-').map(Number); // gm: 1-12（本月）
+                // 本月止數的寬限截止時間點：次月 1 號起算 graceDays 天內都算本月止數
+                let currGraceEnd = new Date(gy, gm, graceDays, 23, 59, 59); // Date 月份參數 0-indexed，gm 剛好等於「次月」
+                // 上月止數（即本月起始度數）的寬限截止時間點
+                let prevGraceEnd = new Date(gy, gm - 1, graceDays, 23, 59, 59);
+
+                let prevList = sorted.filter(r => new Date(r.date) <= prevGraceEnd);
+                if(prevList.length > 0) res.prev = prevList[prevList.length - 1].value;
+
+                // 若當月退宿（且此房間本月無新房客/臨時房客承接），本月止數的抄表時間
+                // 最安全、最精準的截止點應為「退宿當天 23:59:59」，避免誤算到下一位房客的用電度數
+                let currCutoff = currGraceEnd;
+                if (isLeavedInThisMonth) {
+                    let leaveDateStr = historyLeave ? historyLeave.leaveDate : room.leaveDate;
+                    if (leaveDateStr) {
+                        let leaveCutoff = new Date(leaveDateStr + "T23:59:59");
+                        if (leaveCutoff < currCutoff) currCutoff = leaveCutoff;
+                    }
+                }
+
+                let currList = sorted.filter(r => new Date(r.date) > prevGraceEnd && new Date(r.date) <= currCutoff);
+                if(currList.length > 0) {
+                    res.curr = currList[currList.length - 1].value;
+                } else if (sorted.length > 0) {
+                    // 備援機制：如果區間內完全沒抄表，才抓最後一筆現有紀錄
+                    res.curr = sorted[sorted.length - 1].value;
+                }
+
+                if(res.prev !== "—" && res.curr !== "—") {
+                    res.degree = Math.max(0, Math.round((res.curr - res.prev) * 10) / 10);
+                    res.elecFee = Math.round(res.degree * ELECTRICITY_RATE);
+                }
+            }
+
+            if(room.isSpecialLock) { 
+                res.nameDisplay = room.name || "備品室"; 
+                res.isTenantCharge = false;
+                res.total = res.elecFee;
+                return res; 
+            }
+
+            // ---- 💰 費用計算主體 ----
+            if(activeName) {
+                res.nameDisplay = activeName;
+                // [v38.7 修正] 實際雲端資料裡，每個房間會有自己的 managementFee 欄位
+                // （管理者可能針對個別房間手動調整過金額），原本的計算完全忽略這個欄位、
+                // 只用全域的一般/倉庫/套房三種費率去猜，導致管理費金額對不上試算表。
+                // 若房間本身有明確設定 managementFee，優先採用；否則才退回全域費率規則。
+                if (typeof targetAuth.managementFee === 'number') {
+                    res.mgmtFee = targetAuth.managementFee;
+                } else if (typeof room.managementFee === 'number') {
+                    res.mgmtFee = room.managementFee;
+                } else {
+                    res.mgmtFee = (roomId === "5-1") ? configParams.suiteFee : (isWh ? configParams.whFee : configParams.mgmtFee);
+                }
+                
+                if(targetAuth.isWarden || targetAuth.isSecurityOnly || room.isTemp) res.mgmtFee = 0;
+                res.total = res.elecFee + res.mgmtFee;
+            } else if (room.isDriverOnly) {
+                res.nameDisplay = "司領房"; res.isTenantCharge = false; res.total = res.elecFee;
+            } else if (isPublic) {
+                res.total = res.elecFee;
+            } else {
+                res.total = res.elecFee;
+                res.note += res.elecFee > 0 ? "[空房期間用電] " : "";
+            }
+            return res;
+        }
+        
+        function switchRoom(roomId) {
+            currentActiveView = roomId;
+            renderRoomList();
+            const displayArea = document.getElementById('main-display-area');
+            if(!displayArea) return;
+
+            const room = rooms[roomId];
+            if(!room) { displayArea.innerHTML = "<h3>找不到此房間資訊</h3>"; return; }
+
+            let isLocked = isCurrentMonthLocked();
+            let disabledStr = isLocked ? "disabled" : "";
+
+            if(room.readings) { room.readings.sort((a, b) => new Date(b.date) - new Date(a.date)); }
+            let isPublicArea = roomId.includes("公共區域");
+
+            let specialNoteText = "常規一般住宿";
+            if(room.isSpecialLock) specialNoteText = "倉庫 / 備品管制室";
+            else if(room.isDriverOnly) specialNoteText = "團客司領房 (不計常規月費)";
+            else if(room.isWarden) specialNoteText = "舍監專用房 (管理費免收)";
+            else if(room.isSecurityOnly) specialNoteText = "保全夜宿房 (管理費免收)";
+            else if(room.isLeaveRetention) specialNoteText = `留職停薪保留房 (${room.leaveRetentionReason || '原因未註明'}，改倉庫費收費)`;
+            else if(room.isWarehouse) specialNoteText = "倉庫用途 (改倉庫費收費)";
+
+            let html = `
+                <h2>🚪 房間詳情管理: ${roomId}</h2>
+                <div id="meter-section">
+                    <h3>⚡ 電表抄表紀錄 (最新日期在最上方)</h3>
+                    <p>當前計費電價：<b>$${ELECTRICITY_RATE}</b> 元 / 度</p>
+                    <div style="display:flex; gap:10px; margin-bottom:12px; max-width:400px;">
+                        <input type="number" step="0.1" id="new-meter-value" placeholder="請輸入最新電表度數" ${disabledStr}>
+                        <input type="date" id="new-meter-date" value="${TODAY_STR}" ${disabledStr}>
+                        <button onclick="addMeterReading('${roomId}')" style="margin:0;" ${disabledStr}>儲存</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table style="min-width:400px;">
+                            <tr style="background:#e6f0ea;"><th>抄表日期</th><th>電表止數</th><th>操作</th></tr>
+                            ${renderReadingRows(roomId)}
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            if (!isPublicArea) {
+                html += `
+                    <div class="bill-summary-box" style="background:#f9f9f9; border-color:#ccc;">
+                        <h3>📋 房間狀態與基本資料</h3>
+                        <p><b>房客大名：</b> ${room.name || room.lastArchivedName || '暫無長期房客 (空房)'}</p>
+                        ${room.hasRoommate ? `<p><b>同住室友：</b> ${room.roommateName || ''}</p>`:''}
+                        <p><b>入住日期：</b> ${room.checkInDate || '—'}</p>
+                        ${room.leaveDate ? `<p style="color:red;"><b>預定退宿日期：</b> ${room.leaveDate}</p>`:''}
+                        <p style="color: #7e57c2; font-weight: bold;"><b>❗ 特殊需求註記：</b> <span style="background: #eee; padding: 3px 8px; border-radius: 4px;">${specialNoteText}</span></p>
+                        ${renderMultiTempStayLogs(roomId)}
+                        ${renderStayHistoryLogs(roomId)}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="bill-summary-box" style="background:#f5f5f5; border-color:#bbb;">
+                        💡 <b>提示：</b>本區域為公共分攤場域，系統會於總體財務清冊自動帶出電費，但不開放辦理入住。
+                    </div>
+                `;
+            }
+            displayArea.innerHTML = html;
+        }
+
+        function renderReadingRows(roomId) {
+            const room = rooms[roomId];
+            if(!room || !room.readings || room.readings.length === 0) return `<tr><td colspan="3">暫無抄表紀錄</td></tr>`;
+            return room.readings.map((r, idx) => `
+                <tr>
+                    <td><b>${r.date}</b></td>
+                    <td>${r.value}</td>
+                    <td><button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteReading('${roomId}', ${idx})">刪除</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function addMeterReading(roomId) {
+            const valInput = document.getElementById('new-meter-value');
+            const dateInput = document.getElementById('new-meter-date');
+            if(!valInput || !valInput.value) return;
+
+            if(!rooms[roomId].readings) rooms[roomId].readings = [];
+            rooms[roomId].readings.push({ date: dateInput.value, value: parseFloat(valInput.value) });
+            rooms[roomId].readings.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            alert(`✅ 電表紀錄已儲存！`);
+            saveToCloud();
+        }
+
+        function deleteReading(roomId, idx) {
+            if(confirm("確定要刪除這筆抄表紀錄嗎？")) {
+                rooms[roomId].readings.splice(idx, 1);
+                saveToCloud();
+            }
+        }
+
+        function renderMultiTempStayLogs(roomId) {
+            const room = rooms[roomId];
+            if(!room || !room.tempList || room.tempList.length === 0) return "";
+            let html = `<h4>📋 本房臨時預約明細：</h4><ul>`;
+            room.tempList.forEach((t, idx) => {
+                html += `<li><b>${t.name}</b> (${t.count || 1}人) : ${t.startDate} ~ ${t.endDate} 
+                <br><small style="color:#555;">原因：${t.reason} | 申請人：${t.applicant || '—'}</small>
+                <button class="btn-danger" style="padding:2px 6px; font-size:11px; margin-left:10px;" onclick="deleteTempStayRecord('${roomId}', ${idx})">刪除預約</button></li>`;
+            });
+            html += `</ul>`;
+            return html;
+        }
+
+        /**
+         * 渲染詳細面板中，精準無誤的歷史履歷軌跡紀錄表面
+         */
+        function renderStayHistoryLogs(roomId) {
+            const room = rooms[roomId];
+            if(!room || !room.stayHistory || room.stayHistory.length === 0) return "";
+            let html = `<h4 style="color:var(--main-green); margin-top:15px;">📜 歷史歸檔履歷清單 (Stay History)：</h4><ul style="font-size:13px; background:#fff; padding:10px 25px; border:1px solid #ddd; border-radius:6px;">`;
+            room.stayHistory.forEach(h => {
+                let tagStr = h.isWarehouse ? " [倉庫]" : " [常駐]";
+                if(h.isWarden) tagStr = " [舍監房]";
+                if(h.isSecurityOnly) tagStr = " [保全夜宿]";
+                if(h.isLeaveRetention) tagStr = ` [留停保留:${h.leaveRetentionReason}]`;
+                html += `<li style="margin-bottom:4px;">👤 <b>${h.name}</b>${h.hasRoommate?` (同住:${h.roommateName})`:''}${tagStr} | 居住區間：${h.checkInDate || '未註明'} ~ ${h.leaveDate}</li>`;
+            });
+            html += `</ul>`;
+            return html;
+        }
+
+        function deleteTempStayRecord(roomId, idx) {
+            if(confirm("確定要刪除此筆臨時入住預約嗎？")) {
+                rooms[roomId].tempList.splice(idx, 1);
+                if(rooms[roomId].tempList.length === 0) {
+                    delete rooms[roomId].tempList;
+                    rooms[roomId].name = "";
+                    rooms[roomId].isTemp = false;
+                } else {
+                    syncActiveTempRecord(roomId);
+                }
+                saveToCloud();
+            }
+        }
+
+        function openModal(id) { 
+            document.getElementById(id).style.display = 'block'; 
+            initModalRoomSelects();
+        }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function showApplyStayModal() { openModal('apply-stay-modal'); }
+        function showTempStayModal() { openModal('temp-stay-modal'); }
+        function showSpecialRequestModal() { openModal('special-request-modal'); }
+        function showApplyLeaveModal() { openModal('apply-leave-modal'); }
+
+        function initModalRoomSelects() {
+            const selects = ['apply-room', 'temp-room', 'sr-room', 'leave-room', 'backfill-room'];
+            let optionsHtml = '<option value="">--請選擇房間--</option>';
+            
+            Object.keys(ALL_FLOORS).forEach(floor => {
+                ALL_FLOORS[floor].forEach(r => {
+                    if(!r.includes("公共")) {
+                        optionsHtml += `<option value="${r}">${r} (${rooms[r]?.name ? rooms[r].name : '空房'})</option>`;
+                    }
+                });
+            });
+
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = optionsHtml;
+            });
+        }
+
+        function toggleApplySpecialFields() {
+            const type = document.getElementById('apply-special-type').value;
+            document.getElementById('apply-roommate-box').style.display = type === 'ROOMMATE' ? 'block' : 'none';
+        }
+
+        function toggleTempReasonOther() {
+            const val = document.getElementById('temp-reason-select').value;
+            document.getElementById('temp-reason-other-box').style.display = val === '其他' ? 'block' : 'none';
+        }
+
+        function syncTempName() {
+            if(document.getElementById('temp-same-person').checked) {
+                document.getElementById('temp-name').value = document.getElementById('temp-applicant').value;
+            }
+        }
+
+        function toggleSpecialRequestFields() {
+            const type = document.getElementById('sr-type').value;
+            document.getElementById('sr-roommate-box').style.display = type === 'ROOMMATE' ? 'block' : 'none';
+            document.getElementById('sr-leave-box').style.display = type === 'LEAVE_RETENTION' ? 'block' : 'none';
+            calculateRetentionFeePreview();
+        }
+
+        function calculateRetentionFeePreview() {
+            const start = document.getElementById('sr-leave-start').value;
+            const end = document.getElementById('sr-leave-end').value;
+            const box = document.getElementById('retention-calc-box');
+            if(!start || !end || end < start) {
+                box.innerHTML = "💡 請輸入正確的起迄日期試算。";
+                return;
+            }
+            let days = Math.round((new Date(end) - new Date(start)) / (1000*60*60*24));
+            let estFee = Math.ceil((days / 30) * configParams.whFee);
+            box.innerHTML = `📊 留停天數試算：<b>${days}</b> 天，預計預收留停保留費：<b>$${estFee}</b> 元。`;
+        }
+
+        /**
+         * 新人入住申請：寫入前自動將未歸檔的舊人強制封存入陣列，並深度清洗身分特徵
+         */
+        function submitApplyStay() {
+            const roomId = document.getElementById('apply-room').value;
+            const name = document.getElementById('apply-name').value;
+            const startDate = document.getElementById('apply-start-date').value;
+            const type = document.getElementById('apply-special-type').value;
+
+            if(!roomId || !name) { alert("請填寫完整房間與姓名"); return; }
+
+            const room = rooms[roomId];
+            
+            // 安全防護：若有舊人尚未被 checkOut 流程封存，執行強制截斷與封存
+            //
+            // [v38.7 修正] 已退宿人員無法被記錄進收費清冊的根本原因：
+            // 過去若管理者忘記先送出「申請退宿清除」（room.leaveDate 為空），
+            // 系統會直接用「系統當日 TODAY_STR」當作舊房客的退宿日期封存進 stayHistory。
+            // 這會造成兩個嚴重後果：
+            //   1. 舊房客實際入住的月份（例如更早的月份）因為封存的退宿日期對不上，
+            //      在該些月份的財務清冊中會被 findHistoryLeaveInMonth() 完全找不到，
+            //      等於憑空消失、費用未被計算。
+            //   2. 舊房客反而被誤植計費在「新房客實際入住」的當月，蓋過新房客當月的帳單。
+            // 修正做法：若沒有明確的 room.leaveDate，強制要求管理者輸入舊房客實際退宿日期
+            // （預設建議值為新房客入住日的前一天），確保封存進 stayHistory 的日期正確無誤。
+            if(room.name && room.name !== name) {
+                let archiveLeaveDate = room.leaveDate;
+                if(!archiveLeaveDate) {
+                    let suggested = startDate ? shiftDateStr(startDate, -1) : TODAY_STR;
+                    let input = prompt(
+                        `偵測到房間 ${roomId} 原房客「${room.name}」尚未辦理退宿手續。\n請輸入其實際退宿（清算）日期，以正確計入財務清冊：`,
+                        suggested
+                    );
+                    if(input === null) {
+                        alert("已取消入住申請。請先透過「申請退宿清除」設定舊房客的退宿日期，或重新申請時直接輸入。");
+                        return;
+                    }
+                    archiveLeaveDate = input || suggested;
+                }
+                archiveRoomStay(roomId, archiveLeaveDate);
+            }
+
+            // 完全覆蓋、重置基本核心欄位
+            room.name = name;
+            room.checkInDate = startDate;
+            room.leaveDate = '';
+            room.lastArchivedName = '';
+            room.lastArchivedIsWarehouse = false;
+            
+            // 清理身分屬性特徵防止交叉污染
+            room.isWarehouse = (type === 'WAREHOUSE');
+            room.isWarden = (type === 'WARDEN');
+            room.isSecurityOnly = (type === 'SECURITY');
+            room.isLeaveRetention = false;
+            room.leaveRetentionReason = '';
+            room.hasRoommate = false;
+            room.roommateName = '';
+            
+            if(type === 'ROOMMATE') {
+                room.hasRoommate = true;
+                room.roommateName = document.getElementById('apply-roommate-name').value;
+            }
+            if(startDate > TODAY_STR) room.isBookingFuture = true;
+
+            alert(`✅ ${roomId} 長期入住申請成功，舊有殘留狀態已安全重置歸檔！`);
+            closeModal('apply-stay-modal');
+            saveToCloud();
+        }
+
+        function submitTempStay() {
+            const roomId = document.getElementById('temp-room').value;
+            const applicant = document.getElementById('temp-applicant').value;
+            const name = document.getElementById('temp-name').value;
+            const count = parseInt(document.getElementById('temp-count').value) || 1;
+            const startDate = document.getElementById('temp-start-date').value;
+            const endDate = document.getElementById('temp-end-date').value;
+            
+            let reason = document.getElementById('temp-reason-select').value;
+            if(reason === '其他') reason = document.getElementById('temp-reason-other-text').value;
+
+            if(!roomId || !name || !startDate || !endDate) { alert("請填寫臨時入住必要資訊"); return; }
+            if(!rooms[roomId].tempList) rooms[roomId].tempList = [];
+            
+            rooms[roomId].tempList.push({ name, applicant, count, startDate, endDate, reason });
+            syncActiveTempRecord(roomId);
+
+            alert(`✅ ${roomId} 臨時入住預約成功！`);
+            closeModal('temp-stay-modal');
+            saveToCloud();
+        }
+
+        function showTempStayList() {
+            currentActiveView = "temp_list";
+            renderRoomList();
+            const displayArea = document.getElementById('main-display-area');
+            if(!displayArea) return;
+
+            let html = `<h2>📋 全廠全月份臨時入住預約清單總覽</h2>
+                        <div class="table-responsive"><table>
+                        <thead>
+                            <tr style="background:#01579b; color:white;">
+                                <th>房號</th><th>住宿大名</th><th>人數</th><th>入住區間</th><th>申請原因</th><th>申請人</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            let count = 0;
+            Object.keys(rooms).forEach(roomId => {
+                const room = rooms[roomId];
+                if(room.tempList && room.tempList.length > 0) {
+                    room.tempList.forEach(t => {
+                        count++;
+                        html += `<tr>
+                            <td><b>${roomId}</b></td>
+                            <td>${t.name}</td>
+                            <td>${t.count}</td>
+                            <td>${t.startDate} ~ ${t.endDate}</td>
+                            <td>${t.reason}</td>
+                            <td>${t.applicant || '—'}</td>
+                        </tr>`;
+                    });
+                }
+            });
+            if(count === 0) html += `<tr><td colspan="6">目前全系統暫無任何臨時預約記錄</td></tr>`;
+            html += `</tbody></table></div>`;
+            displayArea.innerHTML = html;
+        }
+
+        function submitSpecialRequest() {
+            const roomId = document.getElementById('sr-room').value;
+            const type = document.getElementById('sr-type').value;
+            if(!roomId) return;
+
+            const room = rooms[roomId];
+            room.isWarehouse = (type === 'WAREHOUSE');
+            room.isSecurityOnly = (type === 'SECURITY');
+            room.isWarden = (type === 'WARDEN');
+            
+            if(type === 'ROOMMATE') {
+                room.hasRoommate = true;
+                room.roommateName = document.getElementById('sr-roommate-name').value;
+            } else { room.hasRoommate = false; }
+
+            if(type === 'LEAVE_RETENTION') {
+                room.isLeaveRetention = true; room.isWarehouse = true;
+                room.leaveRetentionReason = document.getElementById('sr-leave-reason').value;
+                room.leaveDate = document.getElementById('sr-leave-end').value;
+            } else { room.isLeaveRetention = false; }
+
+            alert(`✅ 房間 ${roomId} 特殊狀態已成功更新！`);
+            closeModal('special-request-modal');
+            saveToCloud();
+        }
+
+        function submitApplyLeave() {
+            const roomId = document.getElementById('leave-room').value;
+            const lDate = document.getElementById('leave-date').value;
+            if(!roomId) return;
+
+            rooms[roomId].leaveDate = lDate;
+            alert(`✅ 房間 ${roomId} 已設定預定退宿清除日為 ${lDate}`);
+            closeModal('apply-leave-modal');
+            saveToCloud();
+        }
+
+        function showBackfillHistoryModal() { openModal('backfill-history-modal'); }
+
+        /**
+         * [v38.7 新增] 手動補登退宿歷史紀錄。
+         * 適用情境：房間目前 name/leaveDate 都已是空白（例如過去被手動清空、或退宿當下
+         * 未走過「申請退宿清除」正常流程），系統因此完全查不到該房客的歷史紀錄，導致他
+         * 應該被收費的月份在清冊中直接消失。這裡直接往 room.stayHistory 補上一筆正確的
+         * 歷史紀錄（不影響房間目前「空房」的現況），讓 findHistoryLeaveInMonth() 能在對應
+         * 月份正確找到並計費。
+         */
+        function submitBackfillHistory() {
+            const roomId = document.getElementById('backfill-room').value;
+            const name = document.getElementById('backfill-name').value.trim();
+            const checkInDate = document.getElementById('backfill-checkin-date').value;
+            const leaveDate = document.getElementById('backfill-leave-date').value;
+            const isWarehouse = document.getElementById('backfill-is-warehouse').checked;
+
+            if(!roomId) { alert("請選擇房間"); return; }
+            if(!name) { alert("請輸入房客姓名"); return; }
+            if(!leaveDate) { alert("請輸入實際退宿日期（用來決定計費月份），此欄位為必填"); return; }
+
+            const room = rooms[roomId];
+            if(!room) { alert("找不到此房間資料"); return; }
+            if(!room.stayHistory) room.stayHistory = [];
+
+            const alreadyExists = room.stayHistory.some(h => h.name === name && h.leaveDate === leaveDate);
+            if(alreadyExists) {
+                alert(`⚠️ 房間 ${roomId} 已經有「${name}」於 ${leaveDate} 退宿的紀錄了，不重複新增。`);
+                closeModal('backfill-history-modal');
+                return;
+            }
+
+            room.stayHistory.push({
+                name: name,
+                isWarehouse: !!isWarehouse,
+                isWarden: false,
+                isSecurityOnly: false,
+                isLeaveRetention: false,
+                leaveRetentionReason: "",
+                hasRoommate: false,
+                roommateName: "",
+                checkInDate: checkInDate || "",
+                leaveDate: leaveDate
+            });
+
+            alert(`✅ 已補登房間 ${roomId} 的退宿歷史：${name}（退宿日 ${leaveDate}），${monthStrFilter(leaveDate)}的財務清冊將可正確顯示此筆計費。`);
+            closeModal('backfill-history-modal');
+            saveToCloud();
+        }
+
+        function exportTableToExcel(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            let html = table.outerHTML;
+            let excelFile = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'>";
+            excelFile += "<head><meta charset='utf-8'></head><body>";
+            excelFile += html;
+            excelFile += "</body></html>";
+
+            const blob = new Blob([excelFile], { type: "application/vnd.ms-excel;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `宿舍財務清冊_${selectedReportMonth}.xls`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function exportData() {
+            const packageData = { SYSTEM_ROOMS_DATA: rooms, SYSTEM_CONFIG: configParams };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(packageData));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `dorm_backup_${TODAY_STR}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+        
+        function triggerImport() { document.getElementById('import-file').click(); }
+        
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if(imported.SYSTEM_ROOMS_DATA) {
+                        rooms = imported.SYSTEM_ROOMS_DATA;
+                        if(imported.SYSTEM_CONFIG) configParams = imported.SYSTEM_CONFIG;
+                        alert("✅ 系統備份還原成功！正在上傳同步...");
+                        await saveToCloud();
+                    } else { alert("❌ 格式不符"); }
+                } catch(err) { alert("❌ 解析失敗"); }
+            };
+            reader.readAsText(file);
+        }
+
+        window.onload = function() {
+            loadCloudData();
+        };
+    </script>
+</body>
+</html>
